@@ -49,8 +49,9 @@ public class UserController {
     }
 
     @PostMapping("/{id}/assign-role")
-    public ResponseEntity<User> assignRole(@PathVariable Long id, @RequestParam User.Role role) {
-        User updatedUser = userService.assignRole(id, role);
+    public ResponseEntity<User> assignRole(@PathVariable Long id, @RequestParam("role") String role) {
+        User.Role userRole = User.Role.valueOf(role.toUpperCase());
+        User updatedUser = userService.assignRole(id, userRole);
         return ResponseEntity.ok(updatedUser);
     }
 }
