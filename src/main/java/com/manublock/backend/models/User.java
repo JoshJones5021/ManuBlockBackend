@@ -24,7 +24,7 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Role role;
+    private Role role;  // Updated to use the new Role class
 
     private String walletAddress;
 
@@ -61,10 +61,6 @@ public class User {
 
     public void setPassword(String password) { this.password = password; }
 
-    public Role getRole() { return role; }
-
-    public void setRole(Role role) { this.role = role; }
-
     public String getWalletAddress() { return walletAddress; }
 
     public void setWalletAddress(String walletAddress) { this.walletAddress = walletAddress; }
@@ -73,7 +69,7 @@ public class User {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 
-    public enum Role {
-        ADMIN, SUPPLIER, MANUFACTURER, DISTRIBUTOR, CUSTOMER
-    }
+    public Role getRole() { return role; }
+
+    public void setRole(Role role) { this.role = role; }
 }

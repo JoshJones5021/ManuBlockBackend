@@ -6,16 +6,20 @@ import com.manublock.backend.repositories.UserRepository;
 import com.manublock.backend.utils.CustomException;
 import com.manublock.backend.utils.PasswordUtil;
 import jakarta.transaction.Transactional;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import com.manublock.backend.models.Role;  // Import new Role enum
 
 import java.util.Optional;
 
 @Service
 public class UserService {
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository userRepository) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     public User authenticateUser(String email, String rawPassword) {
@@ -30,22 +34,34 @@ public class UserService {
         return user;
     }
 
-
-    @Transactional
-    public User registerUser(RegisterUserRequest request) {
-        Optional<User> existingUser = userRepository.findByEmail(request.getEmail());
-
-        if (existingUser.isPresent()) {
+    public void registerUser(RegisterUserRequest request) {
+        // Check if a user with the same email exists
+        Optional<User> existingUserByEmail = userRepository.findByEmail(request.getEmail());
+        if (existingUserByEmail.isPresent()) {
             throw new CustomException("User with this email already exists.");
+        }
+
+        // Check if a user with the same username exists
+        Optional<User> existingUserByUsername = userRepository.findByUsername(request.getUsername());
+        if (existingUserByUsername.isPresent()) {
+            throw new CustomException("User with this username already exists.");
         }
 
         User user = new User();
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
-        user.setPassword(PasswordUtil.hashPassword(request.getPassword()));
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
 
-        return userRepository.save(user);
+        // Set a default role if not provided
+        if (request.getRole() == null) {
+            user.setRole(Role.CUSTOMER);
+        } else {
+            user.setRole(request.getRole());
+        }
+
+        userRepository.save(user);
     }
+
 
 
     public Optional<User> getUserById(Long id) {
@@ -59,10 +75,10 @@ public class UserService {
         return userRepository.save(user);
     }
 
-    public User assignRole(Long userId, User.Role role) {
+    public User assignRole(Long userId, Role role) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        user.setRole(role);
+        user.setRole(role);  // Assign role correctly
         return userRepository.save(user);
     }
 }

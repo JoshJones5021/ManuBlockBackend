@@ -1,5 +1,6 @@
 package com.manublock.backend.controllers;
 
+import com.manublock.backend.models.Role;
 import com.manublock.backend.models.User;
 import com.manublock.backend.services.UserService;
 import com.manublock.backend.utils.JwtUtil;
@@ -7,6 +8,7 @@ import com.manublock.backend.dto.AuthResponse;
 import com.manublock.backend.dto.LoginRequest;
 import com.manublock.backend.dto.RegisterUserRequest;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 
@@ -37,6 +39,13 @@ public class UserController {
         return ResponseEntity.ok(new AuthResponse(token));
     }
 
+    @PostMapping("/logout")
+    public ResponseEntity<String> logout(@RequestHeader("Authorization") String token) {
+        // Add token to blacklist (implement a proper token blacklist)
+        SecurityContextHolder.clearContext();
+        return ResponseEntity.ok("Logout successful. Token invalidated.");
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<Optional<User>> getUser(@PathVariable Long id) {
         return ResponseEntity.ok(userService.getUserById(id));
@@ -49,9 +58,16 @@ public class UserController {
     }
 
     @PostMapping("/{id}/assign-role")
-    public ResponseEntity<User> assignRole(@PathVariable Long id, @RequestParam("role") String role) {
-        User.Role userRole = User.Role.valueOf(role.toUpperCase());
+    public ResponseEntity<User> assignRole(@PathVariable Long id, @RequestParam String role) {
+        Role userRole = Role.valueOf(role.toUpperCase());
         User updatedUser = userService.assignRole(id, userRole);
         return ResponseEntity.ok(updatedUser);
+    }
+
+    @GetMapping("/dashboard")
+    public ResponseEntity<String> dashboard() {
+        return ResponseEntity.ok()
+                .header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+                .body("Dashboard content");
     }
 }
