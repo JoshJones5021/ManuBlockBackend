@@ -12,6 +12,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -35,8 +36,10 @@ public class UserController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> loginUser(@RequestBody LoginRequest loginRequest) {
         User user = userService.authenticateUser(loginRequest.getEmail(), loginRequest.getPassword());
-        String token = jwtUtil.generateToken(user.getEmail());
-        return ResponseEntity.ok(new AuthResponse(token));
+        String token = jwtUtil.generateToken(user);
+
+        // Include walletAddress in the response
+        return ResponseEntity.ok(new AuthResponse(token, user.getWalletAddress()));
     }
 
     @PostMapping("/logout")
@@ -52,8 +55,9 @@ public class UserController {
     }
 
     @PostMapping("/{id}/connect-wallet")
-    public ResponseEntity<User> connectWallet(@PathVariable Long id, @RequestBody String walletAddress) {
-        User updatedUser = userService.connectWallet(id, walletAddress);
+    public ResponseEntity<User> connectWallet(@PathVariable Long id, @RequestBody Map<String, String> request) {
+        String walletAddress = request.get("walletAddress");
+        User updatedUser = userService.connectWallet(id, walletAddress.isEmpty() ? null : walletAddress);
         return ResponseEntity.ok(updatedUser);
     }
 

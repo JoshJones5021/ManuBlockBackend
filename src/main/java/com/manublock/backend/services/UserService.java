@@ -5,7 +5,6 @@ import com.manublock.backend.models.User;
 import com.manublock.backend.repositories.UserRepository;
 import com.manublock.backend.utils.CustomException;
 import com.manublock.backend.utils.PasswordUtil;
-import jakarta.transaction.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import com.manublock.backend.models.Role;  // Import new Role enum
@@ -61,8 +60,6 @@ public class UserService {
 
         userRepository.save(user);
     }
-
-
 
     public Optional<User> getUserById(Long id) {
         return userRepository.findById(id);
