@@ -45,4 +45,18 @@ public class SupplyChainController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<SupplyChain> updateSupplyChain(@PathVariable Long id, @RequestBody SupplyChain updatedSupplyChain) {
+        try {
+            System.out.println("Received update request for Supply Chain ID: " + id);
+            System.out.println("Updated Supply Chain Data: " + updatedSupplyChain);
+
+            SupplyChain updated = supplyChainService.updateSupplyChain(id, updatedSupplyChain);
+            return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            e.printStackTrace(); // Print full error log
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
 }

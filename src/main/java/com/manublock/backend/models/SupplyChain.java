@@ -19,36 +19,22 @@ public class SupplyChain {
     @OneToMany(mappedBy = "supplyChain", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SupplyChainNode> nodes;
 
-    // ✅ Add Getters and Setters
-    public Long getId() {
-        return id;
-    }
+    @OneToMany(mappedBy = "supplyChain", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Edge> edges;
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    // Getters and Setters
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-    public String getName() {  // ✅ Add this method
-        return name;
-    }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
 
-    public void setName(String name) {  // ✅ Add this method
-        this.name = name;
-    }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
 
-    public String getDescription() {  // ✅ Add this method
-        return description;
-    }
+    public List<SupplyChainNode> getNodes() { return nodes; }
+    public void setNodes(List<SupplyChainNode> nodes) { this.nodes = nodes; }
 
-    public void setDescription(String description) {  // ✅ Add this method
-        this.description = description;
-    }
-
-    public List<SupplyChainNode> getNodes() {  // ✅ Add this method
-        return nodes;
-    }
-
-    public void setNodes(List<SupplyChainNode> nodes) {  // ✅ Add this method
-        this.nodes = nodes;
-    }
+    public List<Edge> getEdges() { return edges; }
+    public void setEdges(List<Edge> edges) { this.edges = edges; }
 }
