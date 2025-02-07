@@ -9,6 +9,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import com.manublock.backend.models.Role;  // Import new Role enum
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -78,4 +79,9 @@ public class UserService {
         user.setRole(role);  // Assign role correctly
         return userRepository.save(user);
     }
+
+    public List<User> getAllUsers() {
+        return userRepository.findAll();
+    }
+
 }

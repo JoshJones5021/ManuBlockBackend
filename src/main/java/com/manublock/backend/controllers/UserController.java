@@ -74,4 +74,14 @@ public class UserController {
                 .header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
                 .body("Dashboard content");
     }
+
+    @GetMapping("/")
+    public ResponseEntity<Iterable<User>> getAllUsers() {
+        return ResponseEntity.ok(userService.getAllUsers());
+    }
+
+    @GetMapping("/roles")
+    public ResponseEntity<Role[]> getAllRoles() {
+        return ResponseEntity.ok(Role.values());
+    }
 }
