@@ -1,3 +1,5 @@
+// src/main/java/com/manublock/backend/controllers/SupplyChainController.java
+
 package com.manublock.backend.controllers;
 
 import com.manublock.backend.models.SupplyChain;
@@ -57,6 +59,17 @@ public class SupplyChainController {
         } catch (Exception e) {
             e.printStackTrace(); // Print full error log
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteSupplyChain(@PathVariable Long id) {
+        try {
+            supplyChainService.deleteSupplyChain(id);
+            return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            e.printStackTrace(); // Print full error log
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 }

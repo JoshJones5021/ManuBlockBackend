@@ -1,13 +1,18 @@
+// src/main/java/com/manublock/backend/services/SupplyChainService.java
+
 package com.manublock.backend.services;
 
 import com.manublock.backend.models.Edge;
 import com.manublock.backend.models.SupplyChain;
 import com.manublock.backend.models.SupplyChainNode;
+import com.manublock.backend.repositories.EdgeRepository;
 import com.manublock.backend.repositories.SupplyChainRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.util.Date;
 import java.util.List;
 
 @Service
@@ -16,9 +21,14 @@ public class SupplyChainService {
     @Autowired
     private SupplyChainRepository supplyChainRepository;
 
+    @Autowired
+    private EdgeRepository edgeRepository;
+
     private static final Logger logger = LoggerFactory.getLogger(SupplyChainService.class);
 
     public SupplyChain createSupplyChain(SupplyChain supplyChain) {
+        supplyChain.setCreatedAt(new Date());
+        supplyChain.setUpdatedAt(new Date());
         return supplyChainRepository.save(supplyChain);
     }
 
@@ -69,14 +79,19 @@ public class SupplyChainService {
             }
         }
 
-// Ensure edges are linked to supply chain
+        // Ensure edges are linked to supply chain
         if (updatedSupplyChain.getEdges() != null) {
             existingSupplyChain.getEdges().clear();
             for (Edge edge : updatedSupplyChain.getEdges()) {
                 edge.setSupplyChain(existingSupplyChain);
+                if (edge.getId() == null) {
+                    edgeRepository.save(edge); // Save the edge before associating it
+                }
                 existingSupplyChain.getEdges().add(edge);
             }
         }
+
+        existingSupplyChain.setUpdatedAt(new Date());
 
         try {
             SupplyChain savedSupplyChain = supplyChainRepository.save(existingSupplyChain);

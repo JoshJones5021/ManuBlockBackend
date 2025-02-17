@@ -1,6 +1,9 @@
+// src/main/java/com/manublock/backend/models/SupplyChain.java
+
 package com.manublock.backend.models;
 
 import jakarta.persistence.*;
+import java.util.Date;
 import java.util.List;
 
 @Entity
@@ -19,8 +22,14 @@ public class SupplyChain {
     @OneToMany(mappedBy = "supplyChain", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SupplyChainNode> nodes;
 
-    @OneToMany(mappedBy = "supplyChain", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ElementCollection
     private List<Edge> edges;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date createdAt;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date updatedAt;
 
     // Getters and Setters
     public Long getId() { return id; }
@@ -37,4 +46,10 @@ public class SupplyChain {
 
     public List<Edge> getEdges() { return edges; }
     public void setEdges(List<Edge> edges) { this.edges = edges; }
+
+    public Date getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Date createdAt) { this.createdAt = createdAt; }
+
+    public Date getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Date updatedAt) { this.updatedAt = updatedAt; }
 }
