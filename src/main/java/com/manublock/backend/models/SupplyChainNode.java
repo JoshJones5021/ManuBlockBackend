@@ -17,7 +17,7 @@ public class SupplyChainNode {
     private String role = "Unassigned";
 
     @Column(nullable = false)
-    private String assignedUser = "Unassigned";
+    private Long assignedUser; // Change this to Long
 
     @Column(nullable = false)
     private double x = 100;  // Default X position
@@ -30,7 +30,7 @@ public class SupplyChainNode {
     @JsonBackReference
     private SupplyChain supplyChain;
 
-    // **✅ Add missing getters and setters for x and y**
+    // Getters and setters
     public double getX() { return x; }
     public void setX(double x) { this.x = x; }
 
@@ -46,6 +46,6 @@ public class SupplyChainNode {
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
 
-    public String getAssignedUser() { return assignedUser; }
-    public void setAssignedUser(String assignedUser) { this.assignedUser = assignedUser; }
+    public Long getAssignedUser() { return assignedUser; }
+    public void setAssignedUser(Long assignedUser) { this.assignedUser = assignedUser; }
 }
