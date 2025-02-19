@@ -24,10 +24,15 @@ public class SupplyChainController {
 
     @PostMapping("/create")
     public ResponseEntity<SupplyChain> createSupplyChain(@RequestBody SupplyChain supplyChain) {
-        if (supplyChain.getName() == null || supplyChain.getDescription() == null) {
-            throw new IllegalArgumentException("Name and description are required.");
+        try {
+            if (supplyChain.getName() == null || supplyChain.getDescription() == null || supplyChain.getCreatedBy() == null) {
+                throw new IllegalArgumentException("Name, description, and createdBy are required.");
+            }
+            return ResponseEntity.ok(supplyChainService.createSupplyChain(supplyChain, supplyChain.getCreatedBy()));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
-        return ResponseEntity.ok(supplyChainService.createSupplyChain(supplyChain));
     }
 
     @GetMapping("/{id}")

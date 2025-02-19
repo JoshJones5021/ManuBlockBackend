@@ -26,7 +26,8 @@ public class SupplyChainService {
 
     private static final Logger logger = LoggerFactory.getLogger(SupplyChainService.class);
 
-    public SupplyChain createSupplyChain(SupplyChain supplyChain) {
+    public SupplyChain createSupplyChain(SupplyChain supplyChain, Long createdBy) {
+        supplyChain.setCreatedBy(createdBy);
         supplyChain.setCreatedAt(new Date());
         supplyChain.setUpdatedAt(new Date());
         return supplyChainRepository.save(supplyChain);

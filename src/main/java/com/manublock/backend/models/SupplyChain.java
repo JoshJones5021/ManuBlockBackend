@@ -1,5 +1,3 @@
-// src/main/java/com/manublock/backend/models/SupplyChain.java
-
 package com.manublock.backend.models;
 
 import jakarta.persistence.*;
@@ -18,6 +16,9 @@ public class SupplyChain {
 
     @Column(nullable = false)
     private String description;
+
+    @Column(nullable = false)
+    private Long createdBy;
 
     @OneToMany(mappedBy = "supplyChain", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SupplyChainNode> nodes;
@@ -40,6 +41,9 @@ public class SupplyChain {
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+
+    public Long getCreatedBy() { return createdBy; }
+    public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
 
     public List<SupplyChainNode> getNodes() { return nodes; }
     public void setNodes(List<SupplyChainNode> nodes) { this.nodes = nodes; }
