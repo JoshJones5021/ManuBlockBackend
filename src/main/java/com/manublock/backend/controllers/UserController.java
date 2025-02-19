@@ -54,6 +54,12 @@ public class UserController {
         return ResponseEntity.ok(userService.getUserById(id));
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody Map<String, String> updates) {
+        User updatedUser = userService.updateUser(id, updates);
+        return ResponseEntity.ok(updatedUser);
+    }
+
     @PostMapping("/{id}/connect-wallet")
     public ResponseEntity<User> connectWallet(@PathVariable Long id, @RequestBody Map<String, String> request) {
         String walletAddress = request.get("walletAddress");

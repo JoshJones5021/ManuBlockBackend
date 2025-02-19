@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import com.manublock.backend.models.Role;  // Import new Role enum
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -82,5 +83,16 @@ public class UserService {
 
     public List<User> getAllUsers() {
         return userRepository.findAll();
+    }
+
+    public User updateUser(Long userId, Map<String, String> updates) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (updates.containsKey("email")) {
+            user.setEmail(updates.get("email"));
+        }
+
+        return userRepository.save(user);
     }
 }
