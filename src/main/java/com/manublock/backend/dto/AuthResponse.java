@@ -9,5 +9,11 @@ public class AuthResponse {
         this.walletAddress = walletAddress;
     }
 
-    public String getToken() { return token; }
+    public String getToken() {
+        return token;
+    }
+
+    public String getWalletAddress() {
+        return walletAddress;
+    }
 }
