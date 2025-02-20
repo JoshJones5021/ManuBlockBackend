@@ -1,5 +1,3 @@
-// src/main/java/com/manublock/backend/services/SupplyChainService.java
-
 package com.manublock.backend.services;
 
 import com.manublock.backend.models.Edge;
@@ -75,6 +73,7 @@ public class SupplyChainService {
                 if (node.getY() == 0) node.setY(100);
                 if (node.getName() == null) node.setName("Unnamed Node");
                 if (node.getRole() == null) node.setRole("Unassigned");
+                if (node.getStatus() == null) node.setStatus("pending"); // Ensure status is set
 
                 existingSupplyChain.getNodes().add(node);
             }

@@ -25,6 +25,9 @@ public class SupplyChainNode {
     @Column(nullable = false)
     private double y = 100;  // Default Y position
 
+    @Column(nullable = false)
+    private String status = "pending";
+
     @ManyToOne
     @JoinColumn(name = "supply_chain_id", nullable = false)
     @JsonBackReference
@@ -48,4 +51,12 @@ public class SupplyChainNode {
 
     public Long getAssignedUser() { return assignedUser; }
     public void setAssignedUser(Long assignedUser) { this.assignedUser = assignedUser; }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
 }
