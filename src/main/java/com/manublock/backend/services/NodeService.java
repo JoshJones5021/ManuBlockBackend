@@ -35,6 +35,8 @@ public class NodeService {
         existingNode.setRole(updatedNode.getRole());
         existingNode.setAssignedUser(updatedNode.getAssignedUser());
         existingNode.setStatus(updatedNode.getStatus());
+        existingNode.setX(updatedNode.getX());
+        existingNode.setY(updatedNode.getY());
 
         return nodeRepository.save(existingNode);
     }
