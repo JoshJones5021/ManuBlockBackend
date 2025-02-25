@@ -23,7 +23,7 @@ public class SupplyChain {
     @OneToMany(mappedBy = "supplyChain", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SupplyChainNode> nodes;
 
-    @ElementCollection
+    @OneToMany(mappedBy = "supplyChain", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Edge> edges;
 
     @Temporal(TemporalType.TIMESTAMP)

@@ -17,7 +17,7 @@ public class SupplyChainNode {
     private String role = "Unassigned";
 
     @Column(nullable = false)
-    private Long assignedUser; // Change this to Long
+    private Long assignedUser = 0L; // Initialize to 0 or any default value
 
     @Column(nullable = false)
     private double x = 100;  // Default X position
@@ -58,5 +58,13 @@ public class SupplyChainNode {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
     }
 }

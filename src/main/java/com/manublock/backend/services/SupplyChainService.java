@@ -4,9 +4,8 @@ import com.manublock.backend.models.Edge;
 import com.manublock.backend.models.SupplyChain;
 import com.manublock.backend.models.SupplyChainNode;
 import com.manublock.backend.repositories.EdgeRepository;
+import com.manublock.backend.repositories.NodeRepository;
 import com.manublock.backend.repositories.SupplyChainRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -20,9 +19,10 @@ public class SupplyChainService {
     private SupplyChainRepository supplyChainRepository;
 
     @Autowired
-    private EdgeRepository edgeRepository;
+    private NodeRepository nodeRepository;
 
-    private static final Logger logger = LoggerFactory.getLogger(SupplyChainService.class);
+    @Autowired
+    private EdgeRepository edgeRepository;
 
     public SupplyChain createSupplyChain(SupplyChain supplyChain, Long createdBy) {
         supplyChain.setCreatedBy(createdBy);
@@ -32,8 +32,7 @@ public class SupplyChainService {
     }
 
     public SupplyChain getSupplyChain(Long id) {
-        return supplyChainRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Supply Chain not found"));
+        return supplyChainRepository.findById(id).orElseThrow(() -> new RuntimeException("Supply Chain not found"));
     }
 
     public List<SupplyChain> getAllSupplyChains() {
@@ -41,66 +40,50 @@ public class SupplyChainService {
     }
 
     public SupplyChain updateSupplyChain(Long id, SupplyChain updatedSupplyChain) {
-        logger.info("Updating supply chain with ID: {}", id);
-
         SupplyChain existingSupplyChain = supplyChainRepository.findById(id)
-                .orElseThrow(() -> {
-                    logger.error("Supply Chain with ID {} not found", id);
-                    return new RuntimeException("Supply Chain not found");
-                });
-
-        logger.info("Existing Supply Chain Data: {}", existingSupplyChain);
+                .orElseThrow(() -> new RuntimeException("Supply Chain not found"));
 
         if (updatedSupplyChain.getName() != null) {
-            logger.info("Updating name: {} -> {}", existingSupplyChain.getName(), updatedSupplyChain.getName());
             existingSupplyChain.setName(updatedSupplyChain.getName());
         }
 
         if (updatedSupplyChain.getDescription() != null) {
-            logger.info("Updating description: {} -> {}", existingSupplyChain.getDescription(), updatedSupplyChain.getDescription());
             existingSupplyChain.setDescription(updatedSupplyChain.getDescription());
         }
 
-        // Ensure nodes are linked to supply chain
+        // Update nodes
         if (updatedSupplyChain.getNodes() != null) {
-            existingSupplyChain.getNodes().clear();
+            for (SupplyChainNode updatedNode : updatedSupplyChain.getNodes()) {
+                SupplyChainNode existingNode = nodeRepository.findById(updatedNode.getId())
+                        .orElseThrow(() -> new RuntimeException("Node not found"));
 
-            for (SupplyChainNode node : updatedSupplyChain.getNodes()) {
-                node.setSupplyChain(existingSupplyChain);
+                // Update only the fields that have changed
+                existingNode.setName(updatedNode.getName());
+                existingNode.setRole(updatedNode.getRole());
+                existingNode.setAssignedUser(updatedNode.getAssignedUser());
+                existingNode.setStatus(updatedNode.getStatus());
+                existingNode.setX(updatedNode.getX());
+                existingNode.setY(updatedNode.getY());
 
-                // Ensure default values
-                if (node.getX() == 0) node.setX(100);
-                if (node.getY() == 0) node.setY(100);
-                if (node.getName() == null) node.setName("Unnamed Node");
-                if (node.getRole() == null) node.setRole("Unassigned");
-                if (node.getStatus() == null) node.setStatus("pending"); // Ensure status is set
-
-                existingSupplyChain.getNodes().add(node);
+                // Save the updated node
+                nodeRepository.save(existingNode);
             }
         }
 
-        // Ensure edges are linked to supply chain
+        // Update edges
         if (updatedSupplyChain.getEdges() != null) {
             existingSupplyChain.getEdges().clear();
+
             for (Edge edge : updatedSupplyChain.getEdges()) {
-                edge.setSupplyChain(existingSupplyChain);
-                if (edge.getId() == null) {
-                    edgeRepository.save(edge); // Save the edge before associating it
-                }
+                edge.setSupplyChain(existingSupplyChain); // Ensure the relationship is set
                 existingSupplyChain.getEdges().add(edge);
             }
         }
 
+        // Update the last modified timestamp
         existingSupplyChain.setUpdatedAt(new Date());
 
-        try {
-            SupplyChain savedSupplyChain = supplyChainRepository.save(existingSupplyChain);
-            logger.info("Successfully updated Supply Chain with ID: {}", savedSupplyChain.getId());
-            return savedSupplyChain;
-        } catch (Exception e) {
-            logger.error("Error updating supply chain: ", e);
-            throw new RuntimeException("Failed to update supply chain", e);
-        }
+        return supplyChainRepository.save(existingSupplyChain);
     }
 
     public void deleteSupplyChain(Long id) {
