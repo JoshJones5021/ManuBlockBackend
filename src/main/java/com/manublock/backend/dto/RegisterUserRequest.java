@@ -1,6 +1,6 @@
 package com.manublock.backend.dto;
 
-import com.manublock.backend.models.Role;
+import com.manublock.backend.models.Roles;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -19,7 +19,7 @@ public class RegisterUserRequest {
     @Size(min = 6, message = "Password must be at least 6 characters long")
     private String password;
 
-    private Role role = Role.CUSTOMER;  // Default role set here
+    private Roles role = Roles.CUSTOMER;  // Default role set here
 
     // Getters and Setters
     public String getUsername() { return username; }
@@ -31,7 +31,7 @@ public class RegisterUserRequest {
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }
 
-    public Role getRole() { return role; }
-    public void setRole(Role role) { this.role = role; }
+    public Roles getRole() { return role; }
+    public void setRole(Roles role) { this.role = role; }
 
 }

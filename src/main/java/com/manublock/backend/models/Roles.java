@@ -1,6 +1,6 @@
 package com.manublock.backend.models;
 
-public enum Role {
+public enum Roles {
     ADMIN,
     SUPPLIER,
     MANUFACTURER,

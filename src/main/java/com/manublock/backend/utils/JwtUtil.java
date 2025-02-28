@@ -1,6 +1,6 @@
 package com.manublock.backend.utils;
 
-import com.manublock.backend.models.User;
+import com.manublock.backend.models.Users;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -16,7 +16,7 @@ public class JwtUtil {
     @Value("${jwt.expiration}")
     private long EXPIRATION_TIME;
 
-    public String generateToken(User user) {
+    public String generateToken(Users user) {
         return Jwts.builder()
                 .setSubject(user.getEmail())  // Email remains as sub
                 .claim("id", user.getId())    // Add user ID

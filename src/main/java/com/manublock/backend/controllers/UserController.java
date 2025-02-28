@@ -1,7 +1,8 @@
 package com.manublock.backend.controllers;
 
-import com.manublock.backend.models.Role;
-import com.manublock.backend.models.User;
+import com.manublock.backend.dto.UserResponse;
+import com.manublock.backend.models.Roles;
+import com.manublock.backend.models.Users;
 import com.manublock.backend.services.UserService;
 import com.manublock.backend.utils.JwtUtil;
 import com.manublock.backend.dto.AuthResponse;
@@ -12,6 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -35,7 +37,7 @@ public class UserController {
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> loginUser(@RequestBody LoginRequest loginRequest) {
-        User user = userService.authenticateUser(loginRequest.getEmail(), loginRequest.getPassword());
+        Users user = userService.authenticateUser(loginRequest.getEmail(), loginRequest.getPassword());
         String token = jwtUtil.generateToken(user);
 
         // Include walletAddress in the response
@@ -50,27 +52,27 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Optional<User>> getUser(@PathVariable Long id) {
+    public ResponseEntity<Optional<Users>> getUser(@PathVariable Long id) {
         return ResponseEntity.ok(userService.getUserById(id));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody Map<String, String> updates) {
-        User updatedUser = userService.updateUser(id, updates);
+    public ResponseEntity<Users> updateUser(@PathVariable Long id, @RequestBody Map<String, String> updates) {
+        Users updatedUser = userService.updateUser(id, updates);
         return ResponseEntity.ok(updatedUser);
     }
 
     @PostMapping("/{id}/connect-wallet")
-    public ResponseEntity<User> connectWallet(@PathVariable Long id, @RequestBody Map<String, String> request) {
+    public ResponseEntity<Users> connectWallet(@PathVariable Long id, @RequestBody Map<String, String> request) {
         String walletAddress = request.get("walletAddress");
-        User updatedUser = userService.connectWallet(id, walletAddress.isEmpty() ? null : walletAddress);
+        Users updatedUser = userService.connectWallet(id, walletAddress.isEmpty() ? null : walletAddress);
         return ResponseEntity.ok(updatedUser);
     }
 
     @PostMapping("/{id}/assign-role")
-    public ResponseEntity<User> assignRole(@PathVariable Long id, @RequestParam String role) {
-        Role userRole = Role.valueOf(role.toUpperCase());
-        User updatedUser = userService.assignRole(id, userRole);
+    public ResponseEntity<Users> assignRole(@PathVariable Long id, @RequestParam String role) {
+        Roles userRole = Roles.valueOf(role.toUpperCase());
+        Users updatedUser = userService.assignRole(id, userRole);
         return ResponseEntity.ok(updatedUser);
     }
 
@@ -82,12 +84,12 @@ public class UserController {
     }
 
     @GetMapping("/")
-    public ResponseEntity<Iterable<User>> getAllUsers() {
-        return ResponseEntity.ok(userService.getAllUsers());
+    public List<UserResponse> getAllUsers() {
+        return userService.getAllUsers();
     }
 
     @GetMapping("/roles")
-    public ResponseEntity<Role[]> getAllRoles() {
-        return ResponseEntity.ok(Role.values());
+    public ResponseEntity<Roles[]> getAllRoles() {
+        return ResponseEntity.ok(Roles.values());
     }
 }

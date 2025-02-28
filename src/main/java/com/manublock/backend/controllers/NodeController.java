@@ -1,6 +1,7 @@
 package com.manublock.backend.controllers;
 
-import com.manublock.backend.models.SupplyChainNode;
+import com.manublock.backend.dto.NodeResponse;
+import com.manublock.backend.models.Nodes;
 import com.manublock.backend.services.NodeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -20,24 +21,33 @@ public class NodeController {
     }
 
     @PostMapping
-    public ResponseEntity<SupplyChainNode> addNode(@PathVariable Long supplyChainId, @RequestBody SupplyChainNode node) {
-        SupplyChainNode createdNode = nodeService.addNode(supplyChainId, node);
+    public ResponseEntity<Nodes> addNode(@PathVariable Long supplyChainId, @RequestBody Nodes node) {
+        Nodes createdNode = nodeService.addNode(supplyChainId, node);
         return ResponseEntity.ok(createdNode);
     }
 
     @GetMapping
-    public ResponseEntity<List<SupplyChainNode>> getNodes(@PathVariable Long supplyChainId) {
-        List<SupplyChainNode> nodes = nodeService.getNodesBySupplyChainId(supplyChainId);
+    public ResponseEntity<List<Nodes>> getNodes(@PathVariable Long supplyChainId) {
+        List<Nodes> nodes = nodeService.getNodesBySupplyChainId(supplyChainId);
         return ResponseEntity.ok(nodes);
     }
 
+    @GetMapping("/{nodeId}")
+    public ResponseEntity<NodeResponse> getNodeById(
+            @PathVariable Long supplyChainId,
+            @PathVariable Long nodeId
+    ) {
+        Nodes node = nodeService.getNodeById(nodeId);
+        return ResponseEntity.ok(new NodeResponse(node)); // ✅ Pass `Nodes` object directly
+    }
+
     @PutMapping("/{nodeId}")
-    public ResponseEntity<SupplyChainNode> updateNode(
+    public ResponseEntity<Nodes> updateNode(
             @PathVariable Long supplyChainId,
             @PathVariable Long nodeId,
-            @RequestBody SupplyChainNode updatedNode
+            @RequestBody Nodes updatedNode
     ) {
-        SupplyChainNode node = nodeService.updateNode(nodeId, updatedNode);
+        Nodes node = nodeService.updateNode(nodeId, updatedNode);
         return ResponseEntity.ok(node);
     }
 
