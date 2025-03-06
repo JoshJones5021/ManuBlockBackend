@@ -11,12 +11,11 @@ import com.manublock.backend.repositories.EdgeRepository;
 import com.manublock.backend.repositories.NodeRepository;
 import com.manublock.backend.repositories.ChainRepository;
 import com.manublock.backend.repositories.UserRepository;
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -34,6 +33,9 @@ public class ChainService {
     @Autowired
     private EdgeRepository edgeRepository;
 
+    @Autowired
+    private BlockchainService blockchainService;
+
     public Chains createSupplyChain(String name, String description, Long userId) {
         Users user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -46,8 +48,24 @@ public class ChainService {
         chain.setUpdatedAt(new Date());
         chain.setNodes(new ArrayList<>());
         chain.setEdges(new ArrayList<>());
+        chain.setBlockchainStatus("PENDING"); // Add this
 
-        return chainRepository.save(chain);
+        Chains savedChain = chainRepository.save(chain);
+
+        // Create on blockchain asynchronously
+        blockchainService.createSupplyChain(savedChain.getId())
+                .thenAccept(txHash -> {
+                    savedChain.setBlockchainTxHash(txHash);
+                    savedChain.setBlockchainStatus("CONFIRMED");
+                    chainRepository.save(savedChain);
+                })
+                .exceptionally(ex -> {
+                    savedChain.setBlockchainStatus("FAILED");
+                    chainRepository.save(savedChain);
+                    return null;
+                });
+
+        return savedChain;
     }
 
     public List<ChainResponse> getAllSupplyChains() {
@@ -170,5 +188,29 @@ public class ChainService {
         nodeRepository.deleteAll(chain.getNodes());
         edgeRepository.deleteAll(chain.getEdges());
         chainRepository.delete(chain);
+    }
+
+    @Transactional
+    public void updateBlockchainInfo(Long chainId, String txHash) {
+        Chains chain = chainRepository.findById(chainId)
+                .orElseThrow(() -> new RuntimeException("Supply Chain not found"));
+
+        chain.setBlockchainTxHash(txHash);
+        chain.setBlockchainStatus("CONFIRMED");
+        chain.setUpdatedAt(new Date());
+
+        chainRepository.save(chain);
+    }
+
+    public Map<String, Object> getBlockchainStatus(Long chainId) {
+        Chains chain = chainRepository.findById(chainId)
+                .orElseThrow(() -> new RuntimeException("Supply Chain not found"));
+
+        Map<String, Object> status = new HashMap<>();
+        status.put("id", chain.getId());
+        status.put("blockchainStatus", chain.getBlockchainStatus());
+        status.put("blockchainTxHash", chain.getBlockchainTxHash());
+
+        return status;
     }
 }

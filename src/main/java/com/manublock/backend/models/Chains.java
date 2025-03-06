@@ -6,7 +6,7 @@ import java.util.Date;
 import java.util.List;
 
 @Entity
-@Table(name = "chains") // Updated table name
+@Table(name = "chains")
 public class Chains {
 
     @Id
@@ -24,11 +24,11 @@ public class Chains {
     private Users createdBy; // Reference to Users
 
     @OneToMany(mappedBy = "supplyChain", cascade = CascadeType.ALL, orphanRemoval = true)
-    @JsonManagedReference(value = "chain-node")  // ✅ Add explicit reference name
+    @JsonManagedReference(value = "chain-node")
     private List<Nodes> nodes;
 
     @OneToMany(mappedBy = "supplyChain", cascade = CascadeType.ALL, orphanRemoval = true)
-    @JsonManagedReference(value = "chain-edge")  // ✅ Add explicit reference name for edges
+    @JsonManagedReference(value = "chain-edge")
     private List<Edges> edges;
 
     @Temporal(TemporalType.TIMESTAMP)
@@ -37,6 +37,14 @@ public class Chains {
     @Temporal(TemporalType.TIMESTAMP)
     private Date updatedAt;
 
+    // Blockchain-related fields
+    @Column
+    private String blockchainTxHash;
+
+    @Column
+    private String blockchainStatus;
+
+    // Original getters and setters
     public Long getId() {
         return id;
     }
@@ -99,5 +107,22 @@ public class Chains {
 
     public void setUpdatedAt(Date updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    // Blockchain-related getters and setters
+    public String getBlockchainTxHash() {
+        return blockchainTxHash;
+    }
+
+    public void setBlockchainTxHash(String blockchainTxHash) {
+        this.blockchainTxHash = blockchainTxHash;
+    }
+
+    public String getBlockchainStatus() {
+        return blockchainStatus;
+    }
+
+    public void setBlockchainStatus(String blockchainStatus) {
+        this.blockchainStatus = blockchainStatus;
     }
 }

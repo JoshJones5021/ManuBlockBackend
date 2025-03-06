@@ -1,0 +1,654 @@
+[
+        {
+        "inputs": [
+        {
+        "internalType": "uint256",
+        "name": "supplyChainId",
+        "type": "uint256"
+        },
+        {
+        "internalType": "address",
+        "name": "participant",
+        "type": "address"
+        }
+        ],
+        "name": "authorizeParticipant",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+        },
+        {
+        "inputs": [
+        {
+        "internalType": "uint256",
+        "name": "itemId",
+        "type": "uint256"
+        },
+        {
+        "internalType": "uint256",
+        "name": "supplyChainId",
+        "type": "uint256"
+        },
+        {
+        "internalType": "uint256",
+        "name": "quantity",
+        "type": "uint256"
+        },
+        {
+        "internalType": "string",
+        "name": "itemType",
+        "type": "string"
+        }
+        ],
+        "name": "createItem",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+        },
+        {
+        "inputs": [
+        {
+        "internalType": "uint256",
+        "name": "supplyChainId",
+        "type": "uint256"
+        }
+        ],
+        "name": "createSupplyChain",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+        },
+        {
+        "inputs": [
+        {
+        "internalType": "uint256",
+        "name": "itemId",
+        "type": "uint256"
+        }
+        ],
+        "name": "deactivateItem",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+        },
+        {
+        "inputs": [],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+        },
+        {
+        "anonymous": false,
+        "inputs": [
+        {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "itemId",
+        "type": "uint256"
+        },
+        {
+        "indexed": true,
+        "internalType": "address",
+        "name": "creator",
+        "type": "address"
+        },
+        {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "quantity",
+        "type": "uint256"
+        },
+        {
+        "indexed": false,
+        "internalType": "string",
+        "name": "itemType",
+        "type": "string"
+        },
+        {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "supplyChainId",
+        "type": "uint256"
+        }
+        ],
+        "name": "ItemCreated",
+        "type": "event"
+        },
+        {
+        "anonymous": false,
+        "inputs": [
+        {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "newItemId",
+        "type": "uint256"
+        },
+        {
+        "indexed": false,
+        "internalType": "uint256[]",
+        "name": "sourceItemIds",
+        "type": "uint256[]"
+        },
+        {
+        "indexed": true,
+        "internalType": "address",
+        "name": "processor",
+        "type": "address"
+        },
+        {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "transactionId",
+        "type": "uint256"
+        }
+        ],
+        "name": "ItemProcessed",
+        "type": "event"
+        },
+        {
+        "anonymous": false,
+        "inputs": [
+        {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "itemId",
+        "type": "uint256"
+        },
+        {
+        "indexed": false,
+        "internalType": "enum FlexibleManuBlock.ItemStatus",
+        "name": "status",
+        "type": "uint8"
+        }
+        ],
+        "name": "ItemStatusUpdated",
+        "type": "event"
+        },
+        {
+        "anonymous": false,
+        "inputs": [
+        {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "itemId",
+        "type": "uint256"
+        },
+        {
+        "indexed": true,
+        "internalType": "address",
+        "name": "from",
+        "type": "address"
+        },
+        {
+        "indexed": true,
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
+        },
+        {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "quantity",
+        "type": "uint256"
+        },
+        {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "transactionId",
+        "type": "uint256"
+        }
+        ],
+        "name": "ItemTransferred",
+        "type": "event"
+        },
+        {
+        "anonymous": false,
+        "inputs": [
+        {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "supplyChainId",
+        "type": "uint256"
+        },
+        {
+        "indexed": true,
+        "internalType": "address",
+        "name": "participant",
+        "type": "address"
+        }
+        ],
+        "name": "ParticipantAuthorized",
+        "type": "event"
+        },
+        {
+        "inputs": [
+        {
+        "internalType": "uint256[]",
+        "name": "sourceItemIds",
+        "type": "uint256[]"
+        },
+        {
+        "internalType": "uint256",
+        "name": "newItemId",
+        "type": "uint256"
+        },
+        {
+        "internalType": "uint256[]",
+        "name": "inputQuantities",
+        "type": "uint256[]"
+        },
+        {
+        "internalType": "uint256",
+        "name": "outputQuantity",
+        "type": "uint256"
+        },
+        {
+        "internalType": "string",
+        "name": "newItemType",
+        "type": "string"
+        }
+        ],
+        "name": "processItem",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+        },
+        {
+        "anonymous": false,
+        "inputs": [
+        {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "supplyChainId",
+        "type": "uint256"
+        },
+        {
+        "indexed": true,
+        "internalType": "address",
+        "name": "creator",
+        "type": "address"
+        }
+        ],
+        "name": "SupplyChainCreated",
+        "type": "event"
+        },
+        {
+        "inputs": [
+        {
+        "internalType": "uint256",
+        "name": "itemId",
+        "type": "uint256"
+        },
+        {
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
+        },
+        {
+        "internalType": "uint256",
+        "name": "quantity",
+        "type": "uint256"
+        },
+        {
+        "internalType": "string",
+        "name": "actionType",
+        "type": "string"
+        }
+        ],
+        "name": "transferItem",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+        },
+        {
+        "inputs": [
+        {
+        "internalType": "uint256",
+        "name": "itemId",
+        "type": "uint256"
+        },
+        {
+        "internalType": "enum FlexibleManuBlock.ItemStatus",
+        "name": "newStatus",
+        "type": "uint8"
+        }
+        ],
+        "name": "updateItemStatus",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+        },
+        {
+        "inputs": [],
+        "name": "admin",
+        "outputs": [
+        {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+        }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+        },
+        {
+        "inputs": [
+        {
+        "internalType": "uint256",
+        "name": "itemId",
+        "type": "uint256"
+        }
+        ],
+        "name": "getItemChildren",
+        "outputs": [
+        {
+        "internalType": "uint256[]",
+        "name": "",
+        "type": "uint256[]"
+        }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+        },
+        {
+        "inputs": [
+        {
+        "internalType": "uint256",
+        "name": "itemId",
+        "type": "uint256"
+        }
+        ],
+        "name": "getItemDetails",
+        "outputs": [
+        {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+        },
+        {
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+        },
+        {
+        "internalType": "uint256",
+        "name": "quantity",
+        "type": "uint256"
+        },
+        {
+        "internalType": "uint256",
+        "name": "supplyChainId",
+        "type": "uint256"
+        },
+        {
+        "internalType": "enum FlexibleManuBlock.ItemStatus",
+        "name": "status",
+        "type": "uint8"
+        },
+        {
+        "internalType": "string",
+        "name": "itemType",
+        "type": "string"
+        },
+        {
+        "internalType": "bool",
+        "name": "isActive",
+        "type": "bool"
+        }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+        },
+        {
+        "inputs": [
+        {
+        "internalType": "uint256",
+        "name": "itemId",
+        "type": "uint256"
+        }
+        ],
+        "name": "getItemParents",
+        "outputs": [
+        {
+        "internalType": "uint256[]",
+        "name": "",
+        "type": "uint256[]"
+        }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+        },
+        {
+        "inputs": [
+        {
+        "internalType": "uint256",
+        "name": "transactionId",
+        "type": "uint256"
+        }
+        ],
+        "name": "getTransactionDetails",
+        "outputs": [
+        {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+        },
+        {
+        "internalType": "uint256",
+        "name": "itemId",
+        "type": "uint256"
+        },
+        {
+        "internalType": "address",
+        "name": "from",
+        "type": "address"
+        },
+        {
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
+        },
+        {
+        "internalType": "uint256",
+        "name": "supplyChainId",
+        "type": "uint256"
+        },
+        {
+        "internalType": "uint256",
+        "name": "quantityTransferred",
+        "type": "uint256"
+        },
+        {
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+        },
+        {
+        "internalType": "string",
+        "name": "actionType",
+        "type": "string"
+        }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+        },
+        {
+        "inputs": [
+        {
+        "internalType": "uint256",
+        "name": "supplyChainId",
+        "type": "uint256"
+        },
+        {
+        "internalType": "address",
+        "name": "participant",
+        "type": "address"
+        }
+        ],
+        "name": "isParticipantAuthorized",
+        "outputs": [
+        {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+        }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+        },
+        {
+        "inputs": [
+        {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+        },
+        {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+        }
+        ],
+        "name": "itemChildren",
+        "outputs": [
+        {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+        }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+        },
+        {
+        "inputs": [
+        {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+        }
+        ],
+        "name": "items",
+        "outputs": [
+        {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+        },
+        {
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+        },
+        {
+        "internalType": "uint256",
+        "name": "quantity",
+        "type": "uint256"
+        },
+        {
+        "internalType": "uint256",
+        "name": "supplyChainId",
+        "type": "uint256"
+        },
+        {
+        "internalType": "enum FlexibleManuBlock.ItemStatus",
+        "name": "status",
+        "type": "uint8"
+        },
+        {
+        "internalType": "string",
+        "name": "itemType",
+        "type": "string"
+        },
+        {
+        "internalType": "bool",
+        "name": "isActive",
+        "type": "bool"
+        }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+        },
+        {
+        "inputs": [
+        {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+        }
+        ],
+        "name": "supplyChains",
+        "outputs": [
+        {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+        },
+        {
+        "internalType": "address",
+        "name": "creator",
+        "type": "address"
+        },
+        {
+        "internalType": "bool",
+        "name": "active",
+        "type": "bool"
+        }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+        },
+        {
+        "inputs": [
+        {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+        }
+        ],
+        "name": "transactions",
+        "outputs": [
+        {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+        },
+        {
+        "internalType": "uint256",
+        "name": "itemId",
+        "type": "uint256"
+        },
+        {
+        "internalType": "address",
+        "name": "from",
+        "type": "address"
+        },
+        {
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
+        },
+        {
+        "internalType": "uint256",
+        "name": "supplyChainId",
+        "type": "uint256"
+        },
+        {
+        "internalType": "uint256",
+        "name": "quantityTransferred",
+        "type": "uint256"
+        },
+        {
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+        },
+        {
+        "internalType": "string",
+        "name": "actionType",
+        "type": "string"
+        }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+        }
+        ]

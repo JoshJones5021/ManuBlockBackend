@@ -2,6 +2,7 @@ package com.manublock.backend.controllers;
 
 import com.manublock.backend.dto.ChainResponse;
 import com.manublock.backend.models.Chains;
+import com.manublock.backend.services.BlockchainService;
 import com.manublock.backend.services.ChainService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -10,16 +11,19 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/api/supply-chains")
 public class ChainController {
 
     private final ChainService chainService;
+    private final BlockchainService blockchainService;
 
     @Autowired
-    public ChainController(ChainService chainService) {
+    public ChainController(ChainService chainService, BlockchainService blockchainService) {
         this.chainService = chainService;
+        this.blockchainService = blockchainService;
     }
 
     @PostMapping("/create")
@@ -34,10 +38,33 @@ public class ChainController {
                         .body("Name, description, and createdBy are required.");
             }
 
+            // Create in PostgreSQL
             Chains newChain = chainService.createSupplyChain(name, description, createdById);
+
+            // Create on blockchain (non-blocking)
+            CompletableFuture<String> txFuture = blockchainService.createSupplyChain(newChain.getId());
+
+            // Add transaction hash to response when available
+            txFuture.thenAccept(txHash -> {
+                // Update chain with transaction hash if needed
+                newChain.setBlockchainTxHash(txHash);
+                chainService.updateBlockchainInfo(newChain.getId(), txHash);
+            });
+
             return ResponseEntity.ok(newChain);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error creating supply chain");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error creating supply chain: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/{id}/blockchain-status")
+    public ResponseEntity<?> getBlockchainStatus(@PathVariable Long id) {
+        try {
+            Map<String, Object> status = chainService.getBlockchainStatus(id);
+            return ResponseEntity.ok(status);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error retrieving blockchain status: " + e.getMessage());
         }
     }
 
