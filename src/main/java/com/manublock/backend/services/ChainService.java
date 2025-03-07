@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,7 +39,7 @@ public class ChainService {
 
     public Chains createSupplyChain(String name, String description, Long userId) {
         Users user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("User not found with ID: " + userId));
 
         Chains chain = new Chains();
         chain.setName(name);
@@ -48,23 +49,46 @@ public class ChainService {
         chain.setUpdatedAt(new Date());
         chain.setNodes(new ArrayList<>());
         chain.setEdges(new ArrayList<>());
-        chain.setBlockchainStatus("PENDING"); // Add this
 
+        // Set initial blockchain status
+        chain.setBlockchainStatus("PENDING");
+
+        // Save to database first
         Chains savedChain = chainRepository.save(chain);
 
-        // Create on blockchain asynchronously
-        blockchainService.createSupplyChain(savedChain.getId())
-                .thenAccept(txHash -> {
-                    savedChain.setBlockchainTxHash(txHash);
-                    savedChain.setBlockchainStatus("CONFIRMED");
-                    chainRepository.save(savedChain);
-                })
-                .exceptionally(ex -> {
-                    savedChain.setBlockchainStatus("FAILED");
-                    chainRepository.save(savedChain);
+        try {
+            // Check if BlockchainService is available and properly configured
+            if (blockchainService != null) {
+                CompletableFuture<String> future = blockchainService.createSupplyChain(savedChain.getId());
+
+                // Handle the future completion separately to avoid blocking
+                future.thenAccept(txHash -> {
+                    try {
+                        // Update in a new transaction
+                        savedChain.setBlockchainTxHash(txHash);
+                        savedChain.setBlockchainStatus("CONFIRMED");
+                        chainRepository.save(savedChain);
+                    } catch (Exception e) {
+                        System.err.println("Error updating blockchain status: " + e.getMessage());
+                    }
+                }).exceptionally(ex -> {
+                    try {
+                        savedChain.setBlockchainStatus("FAILED");
+                        chainRepository.save(savedChain);
+                        System.err.println("Blockchain transaction failed: " + ex.getMessage());
+                    } catch (Exception e) {
+                        System.err.println("Error updating blockchain failure status: " + e.getMessage());
+                    }
                     return null;
                 });
+            }
+        } catch (Exception e) {
+            // Log the error but don't prevent chain creation
+            System.err.println("Error with blockchain integration: " + e.getMessage());
+            e.printStackTrace();
+        }
 
+        // Return the saved chain regardless of blockchain status
         return savedChain;
     }
 

@@ -38,18 +38,8 @@ public class ChainController {
                         .body("Name, description, and createdBy are required.");
             }
 
-            // Create in PostgreSQL
+            // Create in PostgreSQL - blockchain creation is handled inside the service
             Chains newChain = chainService.createSupplyChain(name, description, createdById);
-
-            // Create on blockchain (non-blocking)
-            CompletableFuture<String> txFuture = blockchainService.createSupplyChain(newChain.getId());
-
-            // Add transaction hash to response when available
-            txFuture.thenAccept(txHash -> {
-                // Update chain with transaction hash if needed
-                newChain.setBlockchainTxHash(txHash);
-                chainService.updateBlockchainInfo(newChain.getId(), txHash);
-            });
 
             return ResponseEntity.ok(newChain);
         } catch (Exception e) {
