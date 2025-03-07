@@ -49,6 +49,10 @@ public class BlockchainService {
         this.contract = SmartContract.load(contractAddress, web3j, web3jTransactionManager, dynamicGasProvider);
     }
 
+    public SmartContract getContract() {
+        return contract;
+    }
+
     synchronized public CompletableFuture<String> createSupplyChain(Long supplyChainId) {
         System.out.println("📋 Starting createSupplyChain for ID: " + supplyChainId);
 
@@ -115,11 +119,40 @@ public class BlockchainService {
         tx.setParameters(supplyChainId.toString());
         tx.setStatus("PENDING");
         tx.setCreatedAt(Instant.now());
-        tx.setRetryCount(0); // Add this field to your entity
+        tx.setRetryCount(0);
         transactionRepository.save(tx);
         System.out.println("📝 Created new transaction record in DB");
 
         RemoteFunctionCall<TransactionReceipt> functionCall = contract.createSupplyChain(BigInteger.valueOf(supplyChainId));
+
+        return sendTransactionWithRetry(functionCall, 0, tx)
+                .thenApply(txHash -> {
+                    if (txHash != null && !txHash.isEmpty()) {
+                        System.out.println("✅ Transaction successful! Updating DB with hash: " + txHash);
+                        tx.setTransactionHash(txHash);
+                        tx.setStatus("CONFIRMED");
+                        tx.setConfirmedAt(Instant.now());
+                    } else {
+                        System.out.println("⚠️ Transaction completed but hash is missing. Marking as FAILED.");
+                        tx.setStatus("FAILED");
+                        tx.setFailureReason("Missing transaction hash");
+                    }
+
+                    transactionRepository.save(tx);
+                    return txHash;
+                })
+                .exceptionally(ex -> {
+                    System.out.println("❌ Transaction failed: " + ex.getMessage());
+                    tx.setStatus("FAILED");
+                    tx.setFailureReason(ex.getMessage());
+                    transactionRepository.save(tx);
+                    throw new RuntimeException("Transaction failed: " + ex.getMessage(), ex);
+                });
+    }
+
+    public CompletableFuture<String> sendTransactionWithRetry(
+            RemoteFunctionCall<TransactionReceipt> functionCall,
+            BlockchainTransaction tx) {
 
         return sendTransactionWithRetry(functionCall, 0, tx)
                 .thenApply(txHash -> {
