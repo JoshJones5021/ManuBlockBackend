@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface NodeRepository extends JpaRepository<Nodes, Long> {
     List<Nodes> findBySupplyChain_Id(Long supplyChainId);
+    List<Nodes> findByStatus(String status);
+    List<Nodes> findBySupplyChain_IdAndStatus(Long supplyChainId, String status);
 }

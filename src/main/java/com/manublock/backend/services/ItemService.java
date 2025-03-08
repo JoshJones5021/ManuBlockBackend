@@ -152,6 +152,14 @@ public class ItemService {
     }
 
     /**
+     * Get an item by its ID
+     */
+    public Items getItemById(Long itemId) {
+        return itemRepository.findById(itemId)
+                .orElseThrow(() -> new RuntimeException("Item not found with ID: " + itemId));
+    }
+
+    /**
      * Process multiple input items to create a new item
      */
     public Items processItems(List<Long> sourceItemIds, Long newItemId, String newItemName,
