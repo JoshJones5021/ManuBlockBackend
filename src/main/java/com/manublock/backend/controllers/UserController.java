@@ -8,6 +8,8 @@ import com.manublock.backend.utils.JwtUtil;
 import com.manublock.backend.dto.AuthResponse;
 import com.manublock.backend.dto.LoginRequest;
 import com.manublock.backend.dto.RegisterUserRequest;
+import jakarta.transaction.Transactional;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -83,13 +85,24 @@ public class UserController {
                 .body("Dashboard content");
     }
 
-    @GetMapping("/")
-    public List<UserResponse> getAllUsers() {
-        return userService.getAllUsers();
+    @GetMapping(value = {"/", ""})
+    public ResponseEntity<?> getAllUsers() {
+        try {
+            List<UserResponse> users = userService.getAllUsers();
+            return ResponseEntity.ok(users);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", "Failed to fetch users"));
+        }
     }
 
     @GetMapping("/roles")
     public ResponseEntity<Roles[]> getAllRoles() {
         return ResponseEntity.ok(Roles.values());
+    }
+
+    @Transactional
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteUser(@PathVariable Long id) {
+        return userService.deleteUser(id);  // ✅ Directly return the ResponseEntity from the service
     }
 }

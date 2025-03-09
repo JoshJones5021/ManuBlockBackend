@@ -87,4 +87,15 @@ public class ChainController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error deleting supply chain");
         }
     }
+
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<?> getSupplyChainsByUserId(@PathVariable Long userId) {
+        try {
+            List<ChainResponse> supplyChains = chainService.findSupplyChainsByUserId(userId);
+            return ResponseEntity.ok(supplyChains);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to fetch supply chains for user: " + e.getMessage()));
+        }
+    }
 }

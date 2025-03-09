@@ -127,6 +127,17 @@ public class DistributorController {
         }
     }
 
+    @GetMapping("/transports/source/{sourceId}")
+    public ResponseEntity<?> getTransportsBySource(@PathVariable Long sourceId) {
+        try {
+            List<Transport> transports = distributorService.getTransportsBySource(sourceId);
+            return ResponseEntity.ok(transports);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error retrieving transports by source: " + e.getMessage());
+        }
+    }
+
     @GetMapping("/materials/ready")
     public ResponseEntity<?> getReadyMaterialRequests() {
         try {

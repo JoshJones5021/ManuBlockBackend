@@ -253,6 +253,10 @@ public class DistributorService {
         return transportRepository.findByDistributor_IdAndType(distributorId, type);
     }
 
+    public List<Transport> getTransportsBySource(Long sourceId) {
+        return transportRepository.findBySource_Id(sourceId);
+    }
+
     public List<MaterialRequest> getReadyMaterialRequests() {
         return materialRequestRepository.findByStatus("Allocated");
     }

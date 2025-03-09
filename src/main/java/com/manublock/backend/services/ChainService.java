@@ -237,4 +237,19 @@ public class ChainService {
 
         return status;
     }
+
+    public List<ChainResponse> findSupplyChainsByUserId(Long userId) {
+        List<Chains> userChains = chainRepository.findChainsByAssignedUser(userId);
+
+        return userChains.stream().map(chain -> new ChainResponse(
+                chain.getId(),
+                chain.getName(),
+                chain.getDescription(),
+                chain.getCreatedBy(),  // ✅ Explicitly passing Users object
+                chain.getNodes().stream().map(NodeResponse::new).collect(Collectors.toList()), // ✅ Convert nodes
+                chain.getEdges().stream().map(EdgeResponse::new).collect(Collectors.toList()), // ✅ Convert edges
+                chain.getCreatedAt() != null ? chain.getCreatedAt().toInstant() : null, // ✅ Handle null dates
+                chain.getUpdatedAt() != null ? chain.getUpdatedAt().toInstant() : null  // ✅ Handle null dates
+        )).collect(Collectors.toList());
+    }
 }

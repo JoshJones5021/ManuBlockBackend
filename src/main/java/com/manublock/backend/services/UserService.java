@@ -2,13 +2,19 @@ package com.manublock.backend.services;
 
 import com.manublock.backend.dto.RegisterUserRequest;
 import com.manublock.backend.dto.UserResponse;
+import com.manublock.backend.models.Chains;
+import com.manublock.backend.models.Nodes;
 import com.manublock.backend.models.Users;
+import com.manublock.backend.models.Roles;
 import com.manublock.backend.repositories.UserRepository;
+import com.manublock.backend.repositories.NodeRepository;
 import com.manublock.backend.utils.CustomException;
 import com.manublock.backend.utils.PasswordUtil;
+import jakarta.transaction.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import com.manublock.backend.models.Roles;  // Import new Role enum
 
 import java.util.List;
 import java.util.Map;
@@ -18,10 +24,12 @@ import java.util.stream.Collectors;
 @Service
 public class UserService {
     private final UserRepository userRepository;
+    private final NodeRepository nodeRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository, NodeRepository nodeRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
+        this.nodeRepository = nodeRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -38,13 +46,11 @@ public class UserService {
     }
 
     public void registerUser(RegisterUserRequest request) {
-        // Check if a user with the same email exists
         Optional<Users> existingUserByEmail = userRepository.findByEmail(request.getEmail());
         if (existingUserByEmail.isPresent()) {
             throw new CustomException("User with this email already exists.");
         }
 
-        // Check if a user with the same username exists
         Optional<Users> existingUserByUsername = userRepository.findByUsername(request.getUsername());
         if (existingUserByUsername.isPresent()) {
             throw new CustomException("User with this username already exists.");
@@ -54,13 +60,7 @@ public class UserService {
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-
-        // Set a default role if not provided
-        if (request.getRole() == null) {
-            user.setRole(Roles.CUSTOMER);
-        } else {
-            user.setRole(request.getRole());
-        }
+        user.setRole(request.getRole() == null ? Roles.CUSTOMER : request.getRole());
 
         userRepository.save(user);
     }
@@ -79,13 +79,13 @@ public class UserService {
     public Users assignRole(Long userId, Roles role) {
         Users user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        user.setRole(role);  // Assign role correctly
+        user.setRole(role);
         return userRepository.save(user);
     }
 
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream()
-                .map(UserResponse::new) // ✅ Calls constructor with Users object
+                .map(UserResponse::new)
                 .collect(Collectors.toList());
     }
 
@@ -98,5 +98,43 @@ public class UserService {
         }
 
         return userRepository.save(user);
+    }
+
+    /**
+     * ✅ **Deletes a user safely**
+     * - Ensures admin is not the last one.
+     * - Unassigns user from all supply chain nodes.
+     * - Deletes user if all conditions are met.
+     */
+    @Transactional
+    public ResponseEntity<?> deleteUser(Long userId) {
+        Users user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // ✅ Prevent deleting the last admin
+        if (user.getRole() == Roles.ADMIN) {
+            long adminCount = userRepository.countByRole(Roles.ADMIN);
+            if (adminCount <= 1) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                        Map.of("error", "Cannot delete the last remaining admin.")
+                );
+            }
+        }
+
+        // ✅ Check if the user is assigned to any supply chain nodes
+        List<Nodes> assignedNodes = nodeRepository.findByAssignedUser_Id(userId);
+        if (!assignedNodes.isEmpty()) {
+            Nodes firstNode = assignedNodes.get(0);
+            Chains supplyChain = firstNode.getSupplyChain();
+
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                    Map.of("error", "❌ Cannot delete user since they are assigned to supply chain: " +
+                            supplyChain.getName() + ", ID: " + supplyChain.getId())
+            );
+        }
+
+        // ✅ If no assignments, delete the user
+        userRepository.delete(user);
+        return ResponseEntity.ok(Map.of("message", "User deleted successfully"));
     }
 }
