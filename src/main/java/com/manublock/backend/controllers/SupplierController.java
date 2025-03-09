@@ -44,6 +44,22 @@ public class SupplierController {
         }
     }
 
+    @GetMapping("/material/{id}")
+    public ResponseEntity<?> getMaterialById(@PathVariable Long id) {
+        try {
+            Material material = supplierService.getMaterialById(id);
+
+            if (material == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Material not found");
+            }
+
+            return ResponseEntity.ok(material);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error retrieving material: " + e.getMessage());
+        }
+    }
+
     @PutMapping("/materials/{materialId}")
     public ResponseEntity<?> updateMaterial(
             @PathVariable Long materialId,

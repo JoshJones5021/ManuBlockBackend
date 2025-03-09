@@ -81,6 +81,11 @@ public class SupplierService {
         return savedMaterial;
     }
 
+    public Material getMaterialById(Long materialId) {
+        return materialRepository.findById(materialId)
+                .orElseThrow(() -> new RuntimeException("Material not found"));
+    }
+
     /**
      * Update material details (only mutable properties)
      */
