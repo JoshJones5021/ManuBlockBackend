@@ -144,8 +144,33 @@ public class ItemTracingController {
 
             // Get blockchain item details
             SmartContract contract = blockchainService.getContract();
-            Tuple7<BigInteger, String, BigInteger, BigInteger, BigInteger, String, Boolean> itemDetails =
-                    contract.getItemDetails(BigInteger.valueOf(itemId)).send();
+            Tuple7<BigInteger, String, BigInteger, BigInteger, BigInteger, String, Boolean> itemDetails = null;
+
+            // Implement retry logic inline for now
+            int maxRetries = 5;
+            int retryCount = 0;
+            long waitTime = 1000; // Start with 1 second
+
+            while (true) {
+                try {
+                    itemDetails = contract.getItemDetails(BigInteger.valueOf(itemId)).send();
+                    break; // Success, exit loop
+                } catch (Exception e) {
+                    if ((e.getMessage().contains("429") || e.getMessage().contains("Too Many Requests"))
+                            && retryCount < maxRetries) {
+                        retryCount++;
+                        System.out.println("Rate limit hit. Retrying in " + waitTime + "ms. Attempt " + retryCount + " of " + maxRetries);
+                        Thread.sleep(waitTime);
+                        waitTime *= 2; // Exponential backoff
+                    } else {
+                        throw e; // Re-throw if not a rate limit error or max retries reached
+                    }
+                }
+            }
+
+            if (itemDetails == null) {
+                throw new RuntimeException("Failed to retrieve item details after retries");
+            }
 
             Map<String, Object> currentItem = new HashMap<>();
             currentItem.put("id", itemDetails.component1().longValue());
@@ -159,12 +184,51 @@ public class ItemTracingController {
             response.put("currentState", currentItem);
 
             // Get parent items (recursively if needed)
-            List<BigInteger> parentIds = contract.getItemParents(BigInteger.valueOf(itemId)).send();
+            // Apply same retry pattern
+            List<BigInteger> parentIds = null;
+            retryCount = 0;
+            waitTime = 1000;
+
+            while (true) {
+                try {
+                    parentIds = contract.getItemParents(BigInteger.valueOf(itemId)).send();
+                    break;
+                } catch (Exception e) {
+                    if ((e.getMessage().contains("429") || e.getMessage().contains("Too Many Requests"))
+                            && retryCount < maxRetries) {
+                        retryCount++;
+                        System.out.println("Rate limit hit. Retrying in " + waitTime + "ms. Attempt " + retryCount + " of " + maxRetries);
+                        Thread.sleep(waitTime);
+                        waitTime *= 2;
+                    } else {
+                        throw e;
+                    }
+                }
+            }
+
             List<Map<String, Object>> parentItems = new ArrayList<>();
 
             for (BigInteger parentId : parentIds) {
-                Tuple7<BigInteger, String, BigInteger, BigInteger, BigInteger, String, Boolean> parentDetails =
-                        contract.getItemDetails(parentId).send();
+                Tuple7<BigInteger, String, BigInteger, BigInteger, BigInteger, String, Boolean> parentDetails = null;
+                retryCount = 0;
+                waitTime = 1000;
+
+                while (true) {
+                    try {
+                        parentDetails = contract.getItemDetails(parentId).send();
+                        break;
+                    } catch (Exception e) {
+                        if ((e.getMessage().contains("429") || e.getMessage().contains("Too Many Requests"))
+                                && retryCount < maxRetries) {
+                            retryCount++;
+                            System.out.println("Rate limit hit. Retrying in " + waitTime + "ms. Attempt " + retryCount + " of " + maxRetries);
+                            Thread.sleep(waitTime);
+                            waitTime *= 2;
+                        } else {
+                            throw e;
+                        }
+                    }
+                }
 
                 Map<String, Object> parentItem = new HashMap<>();
                 parentItem.put("id", parentDetails.component1().longValue());
@@ -181,12 +245,51 @@ public class ItemTracingController {
             response.put("parentItems", parentItems);
 
             // Get child items (derivatives or next in supply chain)
-            List<BigInteger> childIds = contract.getItemChildren(BigInteger.valueOf(itemId)).send();
+            // Apply same retry pattern
+            List<BigInteger> childIds = null;
+            retryCount = 0;
+            waitTime = 1000;
+
+            while (true) {
+                try {
+                    childIds = contract.getItemChildren(BigInteger.valueOf(itemId)).send();
+                    break;
+                } catch (Exception e) {
+                    if ((e.getMessage().contains("429") || e.getMessage().contains("Too Many Requests"))
+                            && retryCount < maxRetries) {
+                        retryCount++;
+                        System.out.println("Rate limit hit. Retrying in " + waitTime + "ms. Attempt " + retryCount + " of " + maxRetries);
+                        Thread.sleep(waitTime);
+                        waitTime *= 2;
+                    } else {
+                        throw e;
+                    }
+                }
+            }
+
             List<Map<String, Object>> childItems = new ArrayList<>();
 
             for (BigInteger childId : childIds) {
-                Tuple7<BigInteger, String, BigInteger, BigInteger, BigInteger, String, Boolean> childDetails =
-                        contract.getItemDetails(childId).send();
+                Tuple7<BigInteger, String, BigInteger, BigInteger, BigInteger, String, Boolean> childDetails = null;
+                retryCount = 0;
+                waitTime = 1000;
+
+                while (true) {
+                    try {
+                        childDetails = contract.getItemDetails(childId).send();
+                        break;
+                    } catch (Exception e) {
+                        if ((e.getMessage().contains("429") || e.getMessage().contains("Too Many Requests"))
+                                && retryCount < maxRetries) {
+                            retryCount++;
+                            System.out.println("Rate limit hit. Retrying in " + waitTime + "ms. Attempt " + retryCount + " of " + maxRetries);
+                            Thread.sleep(waitTime);
+                            waitTime *= 2;
+                        } else {
+                            throw e;
+                        }
+                    }
+                }
 
                 Map<String, Object> childItem = new HashMap<>();
                 childItem.put("id", childDetails.component1().longValue());
@@ -206,11 +309,13 @@ public class ItemTracingController {
             try {
                 Items dbItem = itemService.getItemById(itemId);
                 if (dbItem != null) {
+                    currentItem.put("blockchainTxHash", dbItem.getBlockchainTxHash());
                     Map<String, Object> dbDetails = new HashMap<>();
                     dbDetails.put("name", dbItem.getName());
                     dbDetails.put("owner", dbItem.getOwner().getUsername());
                     dbDetails.put("createdAt", dbItem.getCreatedAt());
                     dbDetails.put("updatedAt", dbItem.getUpdatedAt());
+                    dbDetails.put("blockchainTxHash", dbItem.getBlockchainTxHash());
                     response.put("databaseDetails", dbDetails);
                 }
             } catch (Exception e) {

@@ -16,7 +16,9 @@ import org.web3j.protocol.core.RemoteFunctionCall;
 import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
+import java.util.logging.Logger;
 
 @Service
 public class BlockchainService {
@@ -49,8 +51,43 @@ public class BlockchainService {
         this.contract = SmartContract.load(contractAddress, web3j, web3jTransactionManager, dynamicGasProvider);
     }
 
+    private static final Logger logger = Logger.getLogger(BlockchainService.class.getName());
+
     public SmartContract getContract() {
         return contract;
+    }
+
+    /**
+     * Helper method to execute blockchain operations with retry logic
+     */
+    private <T> T executeWithRetry(Callable<T> operation) throws Exception {
+        int maxRetries = 5;
+        int retryCount = 0;
+        long waitTime = 1000; // Start with 1 second
+
+        while (true) {
+            try {
+                return operation.call();
+            } catch (Exception e) {
+                // Check if it's a rate limit error (429)
+                if ((e.getMessage().contains("429") || e.getMessage().contains("Too Many Requests"))
+                        && retryCount < maxRetries) {
+                    retryCount++;
+                    logger.warning("Rate limit hit. Retrying in " + waitTime + "ms. Attempt " + retryCount + " of " + maxRetries);
+                    Thread.sleep(waitTime);
+                    waitTime *= 2; // Exponential backoff
+                } else {
+                    throw e; // Re-throw if not a rate limit error or max retries reached
+                }
+            }
+        }
+    }
+
+    /**
+     * Executes a smart contract function with retry logic for rate limits
+     */
+    public <T> T executeContractFunction(Callable<T> contractFunction) throws Exception {
+        return executeWithRetry(contractFunction);
     }
 
     synchronized public CompletableFuture<String> createSupplyChain(Long supplyChainId) {
