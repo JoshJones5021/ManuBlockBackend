@@ -10,6 +10,7 @@ import com.manublock.backend.repositories.ChainRepository;
 import com.manublock.backend.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -34,7 +35,7 @@ public class NodeService {
 
         node.setSupplyChain(chain);
 
-        // ✅ Ensure assignedUser is properly fetched and set
+        // Ensure assignedUser is properly fetched and set
         if (node.getAssignedUserId() != null) {
             Users user = userRepository.findById(node.getAssignedUserId())
                     .orElseThrow(() -> new RuntimeException("User not found"));
@@ -55,40 +56,90 @@ public class NodeService {
                 .orElseThrow(() -> new RuntimeException("Node not found"));
     }
 
+    @Transactional
     public Nodes updateNode(Long nodeId, Nodes updatedNode) {
         Nodes existingNode = nodeRepository.findById(nodeId)
-                .orElseThrow(() -> new RuntimeException("❌ Node not found"));
+                .orElseThrow(() -> new RuntimeException("Node not found"));
 
-        existingNode.setName(updatedNode.getName());
-        existingNode.setRole(updatedNode.getRole());
-        existingNode.setStatus(updatedNode.getStatus());
-        existingNode.setX(updatedNode.getX());
-        existingNode.setY(updatedNode.getY());
-
-        // ✅ Ensure assignedUser is properly fetched from the database
-        if (updatedNode.getAssignedUser() != null && updatedNode.getAssignedUser().getId() != null) {
-            Users user = userRepository.findById(updatedNode.getAssignedUser().getId())
-                    .orElseThrow(() -> new RuntimeException("❌ User not found"));
-            existingNode.setAssignedUser(user);
-        } else {
-            existingNode.setAssignedUser(null); // Allow unassigning user if needed
+        // Update basic properties
+        if (updatedNode.getName() != null) {
+            existingNode.setName(updatedNode.getName());
         }
 
-        Nodes savedNode = nodeRepository.save(existingNode);
-        System.out.println("✅ Updated node successfully: " + savedNode);
+        if (updatedNode.getRole() != null) {
+            existingNode.setRole(updatedNode.getRole());
+        }
 
-        return savedNode;
+        if (updatedNode.getStatus() != null) {
+            existingNode.setStatus(updatedNode.getStatus());
+        }
+
+        if (updatedNode.getX() != 0) {
+            existingNode.setX(updatedNode.getX());
+        }
+
+        if (updatedNode.getY() != 0) {
+            existingNode.setY(updatedNode.getY());
+        }
+
+        // Handle user assignment
+        if (updatedNode.getAssignedUser() != null && updatedNode.getAssignedUser().getId() != null) {
+            Users user = userRepository.findById(updatedNode.getAssignedUser().getId())
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+            existingNode.setAssignedUser(user);
+        } else if (updatedNode.getAssignedUserId() != null) {
+            Users user = userRepository.findById(updatedNode.getAssignedUserId())
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+            existingNode.setAssignedUser(user);
+        } else if (updatedNode.getAssignedUserId() == null) {
+            // Explicit null assignment means remove the user
+            existingNode.setAssignedUser(null);
+        }
+
+        return nodeRepository.save(existingNode);
     }
 
+    @Transactional
     public void deleteNode(Long nodeId) {
         Nodes node = nodeRepository.findById(nodeId)
                 .orElseThrow(() -> new RuntimeException("Node not found"));
 
-        // ✅ Find and delete all edges linked to this node
+        // Find and delete all edges linked to this node
         List<Edges> edges = edgeRepository.findBySource_IdOrTarget_Id(nodeId, nodeId);
         edgeRepository.deleteAll(edges);
 
-        // ✅ Now delete the node
+        // Now delete the node
         nodeRepository.delete(node);
+    }
+
+    /**
+     * Get nodes by role in a supply chain
+     */
+    public List<Nodes> getNodesByRole(Long supplyChainId, String role) {
+        return nodeRepository.findBySupplyChain_IdAndRole(supplyChainId, role);
+    }
+
+    /**
+     * Check if a user is assigned to a specific role in a supply chain
+     */
+    public boolean isUserAssignedToRole(Long supplyChainId, Long userId, String role) {
+        List<Nodes> nodes = nodeRepository.findBySupplyChain_IdAndRole(supplyChainId, role);
+        return nodes.stream().anyMatch(node ->
+                node.getAssignedUser() != null &&
+                        node.getAssignedUser().getId().equals(userId));
+    }
+
+    /**
+     * Get all nodes assigned to a specific user
+     */
+    public List<Nodes> getNodesByUser(Long userId) {
+        return nodeRepository.findByAssignedUser_Id(userId);
+    }
+
+    /**
+     * Get all nodes in a supply chain assigned to a specific user
+     */
+    public List<Nodes> getNodesBySupplyChainAndUser(Long supplyChainId, Long userId) {
+        return nodeRepository.findBySupplyChain_IdAndAssignedUser_Id(supplyChainId, userId);
     }
 }

@@ -26,13 +26,13 @@ public class ItemService {
     private ChainRepository chainRepository;
 
     @Autowired
-    private ExtendedBlockchainService blockchainService;
+    private AdminBlockchainService adminBlockchainService; // Use admin blockchain service instead
 
     /**
      * Create a new supply chain item in the database and on blockchain
      */
     public Items createItem(Long itemId, String name, String itemType, Long quantity,
-                           Long ownerId, Long supplyChainId) {
+                            Long ownerId, Long supplyChainId) {
 
         Users owner = userRepository.findById(ownerId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -57,8 +57,8 @@ public class ItemService {
         // Save to database first
         Items savedItem = itemRepository.save(item);
 
-        // Create item on blockchain
-        blockchainService.createItem(itemId, supplyChainId, quantity, itemType)
+        // Create item on blockchain using admin wallet
+        adminBlockchainService.createItem(itemId, supplyChainId, quantity, itemType, ownerId)
                 .thenAccept(txHash -> {
                     // Update blockchain status once transaction is confirmed
                     savedItem.setBlockchainTxHash(txHash);
@@ -83,6 +83,8 @@ public class ItemService {
         Items item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new RuntimeException("Item not found"));
 
+        Long fromUserId = item.getOwner().getId();
+
         Users recipient = userRepository.findById(toUserId)
                 .orElseThrow(() -> new RuntimeException("Recipient user not found"));
 
@@ -103,8 +105,8 @@ public class ItemService {
 
         Items savedItem = itemRepository.save(item);
 
-        // Perform blockchain transfer
-        blockchainService.transferItem(itemId, recipientWalletAddress, quantity, actionType)
+        // Perform blockchain transfer using admin wallet
+        adminBlockchainService.transferItem(itemId, recipientWalletAddress, quantity, actionType, fromUserId)
                 .thenAccept(txHash -> {
                     // Update status after blockchain confirmation
                     if (quantity.equals(item.getQuantity())) {
@@ -152,18 +154,10 @@ public class ItemService {
     }
 
     /**
-     * Get an item by its ID
-     */
-    public Items getItemById(Long itemId) {
-        return itemRepository.findById(itemId)
-                .orElseThrow(() -> new RuntimeException("Item not found with ID: " + itemId));
-    }
-
-    /**
      * Process multiple input items to create a new item
      */
     public Items processItems(List<Long> sourceItemIds, Long newItemId, String newItemName,
-                             List<Long> inputQuantities, Long outputQuantity, String newItemType, Long ownerId) {
+                              List<Long> inputQuantities, Long outputQuantity, String newItemType, Long ownerId) {
 
         if (sourceItemIds.size() != inputQuantities.size()) {
             throw new RuntimeException("Source item IDs and quantities must match");
@@ -217,8 +211,8 @@ public class ItemService {
         // Save to database first
         Items savedNewItem = itemRepository.save(newItem);
 
-        // Process on blockchain
-        blockchainService.processItem(sourceItemIds, newItemId, inputQuantities, outputQuantity, newItemType)
+        // Process on blockchain using admin wallet
+        adminBlockchainService.processItem(sourceItemIds, newItemId, inputQuantities, outputQuantity, newItemType, ownerId)
                 .thenAccept(txHash -> {
                     // Update all items after blockchain confirmation
                     savedNewItem.setBlockchainTxHash(txHash);
@@ -255,6 +249,8 @@ public class ItemService {
         Items item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new RuntimeException("Item not found"));
 
+        Long ownerId = item.getOwner().getId();
+
         // Map string status to blockchain enum value
         Integer blockchainStatus;
         switch (newStatus) {
@@ -273,8 +269,8 @@ public class ItemService {
 
         Items savedItem = itemRepository.save(item);
 
-        // Update on blockchain
-        blockchainService.updateItemStatus(itemId, blockchainStatus)
+        // Update on blockchain using admin wallet
+        adminBlockchainService.updateItemStatus(itemId, blockchainStatus, ownerId)
                 .thenAccept(txHash -> {
                     // Update after blockchain confirmation
                     savedItem.setBlockchainTxHash(txHash);
@@ -290,6 +286,14 @@ public class ItemService {
                 });
 
         return savedItem;
+    }
+
+    /**
+     * Get an item by its ID
+     */
+    public Items getItemById(Long itemId) {
+        return itemRepository.findById(itemId)
+                .orElseThrow(() -> new RuntimeException("Item not found with ID: " + itemId));
     }
 
     /**

@@ -6,6 +6,7 @@ import com.manublock.backend.repositories.BlockchainTransactionRepository;
 import io.reactivex.disposables.Disposable;
 import jakarta.annotation.PreDestroy;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -15,9 +16,13 @@ import org.web3j.protocol.core.methods.request.EthFilter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Service to listen to smart contract events and update local database
+ * with rate limiting to avoid Infura 429 errors
  */
 @Service
 public class BlockchainEventListenerService {
@@ -27,7 +32,12 @@ public class BlockchainEventListenerService {
     private final ChainService chainService;
     private final BlockchainTransactionRepository blockchainTransactionRepository;
 
+    // Rate limiting settings
+    @Value("${blockchain.polling.interval:10}")
+    private int pollingIntervalSeconds;
+
     private List<Disposable> subscriptions = new ArrayList<>();
+    private ScheduledExecutorService scheduledExecutor;
 
     @Autowired
     public BlockchainEventListenerService(
@@ -42,163 +52,103 @@ public class BlockchainEventListenerService {
     }
 
     @EventListener(ApplicationReadyEvent.class)
-    public void subscribeToEvents() {
+    public void setupPolling() {
+        System.out.println("Setting up blockchain event polling with " + pollingIntervalSeconds + " second interval");
+
+        // Use a scheduled executor instead of continuous polling
+        scheduledExecutor = Executors.newScheduledThreadPool(1);
+        scheduledExecutor.scheduleWithFixedDelay(
+                this::pollBlockchainEvents,
+                10, // Initial delay
+                pollingIntervalSeconds, // Polling interval
+                TimeUnit.SECONDS
+        );
+    }
+
+    /**
+     * Method to poll for events manually instead of using continuous subscriptions
+     */
+    private void pollBlockchainEvents() {
         try {
             // Get the contract instance
             SmartContract contract = blockchainService.getContract();
             String contractAddress = contract.getContractAddress();
 
-            // Create filter for events from our contract address
+            // Create filter for latest block only
             EthFilter filter = new EthFilter(
                     DefaultBlockParameterName.LATEST,
                     DefaultBlockParameterName.LATEST,
                     contractAddress);
 
-            // Subscribe to SupplyChainCreated events
-            Disposable supplyChainCreatedSubscription = contract.supplyChainCreatedEventFlowable(filter)
-                    .subscribe(event -> {
-                        System.out.println("🔗 Supply Chain Created Event Received: " + event.supplyChainId);
-                        handleSupplyChainCreatedEvent(event);
-                    }, error -> {
-                        System.err.println("❌ Error in supply chain event subscription: " + error.getMessage());
-                    });
-            subscriptions.add(supplyChainCreatedSubscription);
+            // Check for recent transactions and update database
+            checkPendingTransactions();
 
-            // Subscribe to ParticipantAuthorized events
-            Disposable participantAuthorizedSubscription = contract.participantAuthorizedEventFlowable(filter)
-                    .subscribe(event -> {
-                        System.out.println("👤 Participant Authorized Event Received: Chain " +
-                                event.supplyChainId + ", Participant: " + event.participant);
-                        handleParticipantAuthorizedEvent(event);
-                    }, error -> {
-                        System.err.println("❌ Error in participant event subscription: " + error.getMessage());
-                    });
-            subscriptions.add(participantAuthorizedSubscription);
-
-            // Subscribe to ItemCreated events
-            Disposable itemCreatedSubscription = contract.itemCreatedEventFlowable(filter)
-                    .subscribe(event -> {
-                        System.out.println("📦 Item Created Event Received: " + event.itemId);
-                        handleItemCreatedEvent(event);
-                    }, error -> {
-                        System.err.println("❌ Error in item created event subscription: " + error.getMessage());
-                    });
-            subscriptions.add(itemCreatedSubscription);
-
-            // Subscribe to ItemTransferred events
-            Disposable itemTransferredSubscription = contract.itemTransferredEventFlowable(filter)
-                    .subscribe(event -> {
-                        System.out.println("🔄 Item Transferred Event: " + event.itemId +
-                                " from " + event.from + " to " + event.to);
-                        handleItemTransferredEvent(event);
-                    }, error -> {
-                        System.err.println("❌ Error in item transfer event subscription: " + error.getMessage());
-                    });
-            subscriptions.add(itemTransferredSubscription);
-
-            System.out.println("✅ Successfully subscribed to blockchain events");
+            // Log polling activity (can be removed in production)
+            System.out.println("✅ Polled blockchain events successfully");
         } catch (Exception e) {
-            System.err.println("❌ Failed to subscribe to blockchain events: " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("❌ Error polling blockchain events: " + e.getMessage());
+
+            // If it's a rate limit error, increase the backoff
+            if (e.getMessage() != null && e.getMessage().contains("429")) {
+                System.err.println("Rate limit hit, consider increasing polling interval in application.properties");
+            }
         }
     }
 
-    private void handleSupplyChainCreatedEvent(SmartContract.SupplyChainCreatedEventResponse event) {
+    /**
+     * Check for pending transactions and update their status
+     */
+    private void checkPendingTransactions() {
         try {
-            Long supplyChainId = event.supplyChainId.longValue();
-            String txHash = event.log.getTransactionHash();
-
-            // Update the supply chain with blockchain transaction hash and status
-            chainService.updateBlockchainInfo(supplyChainId, txHash);
-
-            // Update any pending transactions
             List<BlockchainTransaction> pendingTxs = blockchainTransactionRepository.findByStatus("PENDING");
+
             for (BlockchainTransaction tx : pendingTxs) {
-                if ("createSupplyChain".equals(tx.getFunction()) && tx.getParameters().equals(supplyChainId.toString())) {
-                    tx.setStatus("CONFIRMED");
-                    tx.setTransactionHash(txHash);
-                    blockchainTransactionRepository.save(tx);
-                    break;
+                if (tx.getTransactionHash() != null && !tx.getTransactionHash().isEmpty()) {
+                    // Check if transaction has been confirmed
+                    web3j.ethGetTransactionReceipt(tx.getTransactionHash())
+                            .sendAsync()
+                            .thenAccept(receipt -> {
+                                if (receipt.getTransactionReceipt().isPresent()) {
+                                    // Transaction confirmed
+                                    tx.setStatus("CONFIRMED");
+                                    blockchainTransactionRepository.save(tx);
+
+                                    // If it's a supply chain creation, update the chain status
+                                    if ("createSupplyChain".equals(tx.getFunction())) {
+                                        try {
+                                            Long chainId = Long.valueOf(tx.getParameters());
+                                            chainService.updateBlockchainInfo(chainId, tx.getTransactionHash());
+                                        } catch (Exception e) {
+                                            System.err.println("Error updating supply chain status: " + e.getMessage());
+                                        }
+                                    }
+                                }
+                            })
+                            .exceptionally(e -> {
+                                System.err.println("Error checking transaction receipt: " + e.getMessage());
+                                return null;
+                            });
                 }
             }
         } catch (Exception e) {
-            System.err.println("❌ Error handling SupplyChainCreated event: " + e.getMessage());
-        }
-    }
-
-    private void handleParticipantAuthorizedEvent(SmartContract.ParticipantAuthorizedEventResponse event) {
-        try {
-            // Here you would update your local database to reflect participant authorization
-            // This could involve finding users by wallet address and updating their permissions
-
-            // Also update pending transactions
-            String txHash = event.log.getTransactionHash();
-            List<BlockchainTransaction> pendingTxs = blockchainTransactionRepository.findByStatus("PENDING");
-            for (BlockchainTransaction tx : pendingTxs) {
-                if ("authorizeParticipant".equals(tx.getFunction()) &&
-                        tx.getParameters().contains(event.supplyChainId.toString())) {
-                    tx.setStatus("CONFIRMED");
-                    tx.setTransactionHash(txHash);
-                    blockchainTransactionRepository.save(tx);
-                    break;
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("❌ Error handling ParticipantAuthorized event: " + e.getMessage());
-        }
-    }
-
-    private void handleItemCreatedEvent(SmartContract.ItemCreatedEventResponse event) {
-        try {
-            // Update pending transactions for item creation
-            String txHash = event.log.getTransactionHash();
-            List<BlockchainTransaction> pendingTxs = blockchainTransactionRepository.findByStatus("PENDING");
-            for (BlockchainTransaction tx : pendingTxs) {
-                if ("createItem".equals(tx.getFunction()) &&
-                        tx.getParameters().contains(event.itemId.toString())) {
-                    tx.setStatus("CONFIRMED");
-                    tx.setTransactionHash(txHash);
-                    blockchainTransactionRepository.save(tx);
-                    break;
-                }
-            }
-
-            // Here you would update your local database with the item information
-            // including creator, quantity, type, and supply chain ID
-        } catch (Exception e) {
-            System.err.println("❌ Error handling ItemCreated event: " + e.getMessage());
-        }
-    }
-
-    private void handleItemTransferredEvent(SmartContract.ItemTransferredEventResponse event) {
-        try {
-            // Update pending transactions for item transfers
-            String txHash = event.log.getTransactionHash();
-            List<BlockchainTransaction> pendingTxs = blockchainTransactionRepository.findByStatus("PENDING");
-            for (BlockchainTransaction tx : pendingTxs) {
-                if ("transferItem".equals(tx.getFunction()) &&
-                        tx.getParameters().contains(event.itemId.toString())) {
-                    tx.setStatus("CONFIRMED");
-                    tx.setTransactionHash(txHash);
-                    blockchainTransactionRepository.save(tx);
-                    break;
-                }
-            }
-
-            // Here you would update your local database to reflect the transfer
-            // This could involve updating ownership records, quantities, etc.
-        } catch (Exception e) {
-            System.err.println("❌ Error handling ItemTransferred event: " + e.getMessage());
+            System.err.println("Error checking pending transactions: " + e.getMessage());
         }
     }
 
     @PreDestroy
     public void cleanup() {
         System.out.println("Cleaning up blockchain event subscriptions...");
+
+        // Dispose RxJava subscriptions if any
         for (Disposable subscription : subscriptions) {
             if (!subscription.isDisposed()) {
                 subscription.dispose();
             }
+        }
+
+        // Shutdown the scheduled executor
+        if (scheduledExecutor != null) {
+            scheduledExecutor.shutdownNow();
         }
     }
 }

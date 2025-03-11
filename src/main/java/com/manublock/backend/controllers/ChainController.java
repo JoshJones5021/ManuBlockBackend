@@ -4,6 +4,7 @@ import com.manublock.backend.dto.ChainResponse;
 import com.manublock.backend.models.Chains;
 import com.manublock.backend.services.BlockchainService;
 import com.manublock.backend.services.ChainService;
+import com.manublock.backend.services.SupplyChainFinalizationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/api/supply-chains")
@@ -19,11 +19,14 @@ public class ChainController {
 
     private final ChainService chainService;
     private final BlockchainService blockchainService;
+    private final SupplyChainFinalizationService finalizationService;
 
     @Autowired
-    public ChainController(ChainService chainService, BlockchainService blockchainService) {
+    public ChainController(ChainService chainService, BlockchainService blockchainService,
+                           SupplyChainFinalizationService finalizationService) {
         this.chainService = chainService;
         this.blockchainService = blockchainService;
+        this.finalizationService = finalizationService;
     }
 
     @PostMapping("/create")
@@ -71,6 +74,13 @@ public class ChainController {
     @PutMapping("/{id}")
     public ResponseEntity<?> updateSupplyChain(@PathVariable Long id, @RequestBody Chains updatedChains) {
         try {
+            // First check if supply chain is finalized
+            boolean isFinalized = finalizationService.isSupplyChainFinalized(id);
+            if (isFinalized) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("Cannot update a finalized supply chain");
+            }
+
             return ResponseEntity.ok(chainService.updateSupplyChain(id, updatedChains));
         } catch (Exception e) {
             e.printStackTrace(); // Print full stack trace in logs
@@ -81,6 +91,13 @@ public class ChainController {
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteSupplyChain(@PathVariable Long id) {
         try {
+            // First check if supply chain is finalized
+            boolean isFinalized = finalizationService.isSupplyChainFinalized(id);
+            if (isFinalized) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("Cannot delete a finalized supply chain");
+            }
+
             chainService.deleteSupplyChain(id);
             return ResponseEntity.noContent().build();
         } catch (Exception e) {
@@ -96,6 +113,49 @@ public class ChainController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to fetch supply chains for user: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{id}/finalize")
+    public ResponseEntity<?> finalizeSupplyChain(@PathVariable Long id) {
+        try {
+            // Check if already finalized
+            boolean isFinalized = finalizationService.isSupplyChainFinalized(id);
+            if (isFinalized) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(Map.of("error", "Supply chain is already finalized"));
+            }
+
+            // Finalize supply chain
+            Chains finalizedChain = finalizationService.finalizeSupplyChain(id);
+            return ResponseEntity.ok(Map.of(
+                    "message", "Supply chain finalized successfully",
+                    "status", finalizedChain.getBlockchainStatus()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to finalize supply chain: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{id}/is-finalized")
+    public ResponseEntity<?> isFinalized(@PathVariable Long id) {
+        try {
+            boolean isFinalized = finalizationService.isSupplyChainFinalized(id);
+            return ResponseEntity.ok(Map.of("finalized", isFinalized));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to check finalization status: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{id}/assigned-users")
+    public ResponseEntity<?> getAssignedUsers(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(finalizationService.getAssignedUsers(id));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to get assigned users: " + e.getMessage()));
         }
     }
 }
