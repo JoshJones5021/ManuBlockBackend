@@ -9,10 +9,11 @@ import org.springframework.stereotype.Service;
 import org.web3j.tuples.generated.Tuple7;
 
 import java.math.BigInteger;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Service responsible for managing node statuses in the supply chain visualization
@@ -25,11 +26,16 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Service
 public class NodeStatusService {
+    private static final Logger LOGGER = Logger.getLogger(NodeStatusService.class.getName());
+    private static final int MAX_RETRIES = 3;
+    private static final int MAX_BATCH_SIZE = 10;
+
     private final NodeRepository nodeRepository;
     private final BlockchainService blockchainService;
 
     // Using ConcurrentHashMap for thread safety with scheduled tasks
     private final Map<Long, Long> nodeToBlockchainItemMap = new ConcurrentHashMap<>();
+    private final Map<Long, Integer> nodeSyncRetryCount = new ConcurrentHashMap<>();
 
     @Autowired
     public NodeStatusService(NodeRepository nodeRepository, BlockchainService blockchainService) {
@@ -46,8 +52,12 @@ public class NodeStatusService {
         Nodes node = nodeRepository.findById(nodeId)
                 .orElseThrow(() -> new RuntimeException("Node not found"));
 
-        node.setStatus(status);
-        nodeRepository.save(node);
+        // Only update if status is actually changing to avoid unnecessary DB writes
+        if (!status.equals(node.getStatus())) {
+            node.setStatus(status);
+            nodeRepository.save(node);
+            LOGGER.info("Node " + nodeId + " status updated to: " + status);
+        }
     }
 
     /**
@@ -58,9 +68,25 @@ public class NodeStatusService {
     public void associateNodeWithBlockchainItem(Long nodeId, Long blockchainItemId) {
         // Save the association
         nodeToBlockchainItemMap.put(nodeId, blockchainItemId);
+        nodeSyncRetryCount.put(nodeId, 0); // Reset retry count
 
         // Immediately sync the status
         syncNodeWithBlockchainItem(nodeId, blockchainItemId);
+
+        // Store the association in the database for persistence
+        // This would require adding a node_blockchain_items table
+        try {
+            Nodes node = nodeRepository.findById(nodeId)
+                    .orElseThrow(() -> new RuntimeException("Node not found"));
+
+            // Assuming we add a blockchainItemId field to the Nodes entity
+            // node.setBlockchainItemId(blockchainItemId);
+            // nodeRepository.save(node);
+
+            LOGGER.info("Node " + nodeId + " associated with blockchain item " + blockchainItemId);
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error persisting node-item association", e);
+        }
     }
 
     /**
@@ -69,6 +95,21 @@ public class NodeStatusService {
      */
     public void removeNodeAssociation(Long nodeId) {
         nodeToBlockchainItemMap.remove(nodeId);
+        nodeSyncRetryCount.remove(nodeId);
+
+        // Also remove from database
+        try {
+            Nodes node = nodeRepository.findById(nodeId)
+                    .orElseThrow(() -> new RuntimeException("Node not found"));
+
+            // Assuming we add a blockchainItemId field to the Nodes entity
+            // node.setBlockchainItemId(null);
+            // nodeRepository.save(node);
+
+            LOGGER.info("Removed blockchain item association from node " + nodeId);
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Error removing node-item association from database", e);
+        }
     }
 
     /**
@@ -102,20 +143,65 @@ public class NodeStatusService {
             }
 
             updateNodeStatus(nodeId, status);
+
+            // Reset retry count on success
+            nodeSyncRetryCount.put(nodeId, 0);
         } catch (Exception e) {
-            throw new RuntimeException("Error syncing node with blockchain item: " + e.getMessage(), e);
+            // Implement retry counting
+            int retryCount = nodeSyncRetryCount.getOrDefault(nodeId, 0);
+            nodeSyncRetryCount.put(nodeId, retryCount + 1);
+
+            if (retryCount >= MAX_RETRIES) {
+                LOGGER.log(Level.SEVERE, "Failed to sync node " + nodeId + " after " + MAX_RETRIES + " attempts", e);
+                // Optionally, update node status to indicate error
+                updateNodeStatus(nodeId, "error");
+                // Remove from active tracking to avoid continued failures
+                nodeToBlockchainItemMap.remove(nodeId);
+                nodeSyncRetryCount.remove(nodeId);
+            } else {
+                LOGGER.log(Level.WARNING, "Error syncing node " + nodeId + ", retry " + retryCount, e);
+            }
         }
     }
 
     /**
      * Sync all nodes that are associated with blockchain items
+     * Process nodes in batches to avoid overwhelming the blockchain provider
      */
     public void syncAllNodeStatuses() {
-        for (Map.Entry<Long, Long> entry : nodeToBlockchainItemMap.entrySet()) {
+        // Get a snapshot of current node mappings to avoid ConcurrentModificationException
+        Map<Long, Long> nodesToSync = new HashMap<>(nodeToBlockchainItemMap);
+
+        // Process in batches to avoid rate limiting
+        List<Long> nodeIds = new ArrayList<>(nodesToSync.keySet());
+
+        for (int i = 0; i < nodeIds.size(); i += MAX_BATCH_SIZE) {
+            int endIndex = Math.min(i + MAX_BATCH_SIZE, nodeIds.size());
+            List<Long> batch = nodeIds.subList(i, endIndex);
+
+            LOGGER.info("Syncing batch of " + batch.size() + " nodes");
+
+            for (Long nodeId : batch) {
+                try {
+                    Long blockchainItemId = nodesToSync.get(nodeId);
+                    if (blockchainItemId != null) {
+                        syncNodeWithBlockchainItem(nodeId, blockchainItemId);
+                    }
+
+                    // Small delay between items to avoid rate limiting
+                    TimeUnit.MILLISECONDS.sleep(100);
+                } catch (Exception e) {
+                    LOGGER.log(Level.WARNING, "Error in batch node sync for node " + nodeId, e);
+                }
+            }
+
+            // Add delay between batches
             try {
-                syncNodeWithBlockchainItem(entry.getKey(), entry.getValue());
-            } catch (Exception e) {
-                System.err.println("Error syncing node " + entry.getKey() + ": " + e.getMessage());
+                TimeUnit.SECONDS.sleep(1);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                LOGGER.log(Level.WARNING, "Sync operation interrupted", e);
+                break;
             }
         }
     }
@@ -129,19 +215,27 @@ public class NodeStatusService {
         // In a real implementation, you would load this data from a persistent store
         // For example, you might have a NodeItemAssociation entity in the database
 
-        // Implement this based on your specific persistence strategy
+        // Example implementation:
+        // List<NodeItemAssociation> associations = nodeItemAssociationRepository.findAll();
+        // for (NodeItemAssociation assoc : associations) {
+        //     nodeToBlockchainItemMap.put(assoc.getNodeId(), assoc.getBlockchainItemId());
+        //     nodeSyncRetryCount.put(assoc.getNodeId(), 0);
+        // }
+        // LOGGER.info("Loaded " + associations.size() + " node-item associations");
     }
 
     /**
      * Scheduled task to sync node statuses with blockchain items
-     * Runs every 5 minutes
+     * Runs every 5 minutes instead of more frequently to reduce API calls
      */
     @Scheduled(fixedRate = 300000) // 5 minutes in milliseconds
     public void scheduledStatusSync() {
         try {
+            LOGGER.info("Starting scheduled node status sync");
             syncAllNodeStatuses();
+            LOGGER.info("Completed scheduled node status sync");
         } catch (Exception e) {
-            System.err.println("Error in scheduled status sync: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Error in scheduled status sync", e);
         }
     }
 

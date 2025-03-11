@@ -17,10 +17,14 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 @Service
 public class ChainService {
+    private static final Logger LOGGER = Logger.getLogger(ChainService.class.getName());
+    private static final int MAX_BLOCKCHAIN_RETRIES = 3;
 
     @Autowired
     private ChainRepository chainRepository;
@@ -37,10 +41,15 @@ public class ChainService {
     @Autowired
     private BlockchainService blockchainService;
 
+    /**
+     * Creates a new supply chain in the database and registers it on the blockchain
+     * Improved to better handle blockchain failures
+     */
     public Chains createSupplyChain(String name, String description, Long userId) {
         Users user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found with ID: " + userId));
 
+        // Create a new supply chain with initial blockchain status as PENDING
         Chains chain = new Chains();
         chain.setName(name);
         chain.setDescription(description);
@@ -49,68 +58,108 @@ public class ChainService {
         chain.setUpdatedAt(new Date());
         chain.setNodes(new ArrayList<>());
         chain.setEdges(new ArrayList<>());
-
-        // Set initial blockchain status
         chain.setBlockchainStatus("PENDING");
 
         // Save to database first
         Chains savedChain = chainRepository.save(chain);
+        LOGGER.info("Created supply chain in database with ID: " + savedChain.getId());
 
+        // Async blockchain registration with better error handling
+        registerSupplyChainOnBlockchain(savedChain);
+
+        return savedChain;
+    }
+
+    /**
+     * Registers a supply chain on the blockchain asynchronously
+     * With improved error handling and retry mechanism
+     */
+    private void registerSupplyChainOnBlockchain(Chains chain) {
         try {
-            // Check if BlockchainService is available and properly configured
             if (blockchainService != null) {
-                CompletableFuture<String> future = blockchainService.createSupplyChain(savedChain.getId());
+                CompletableFuture<String> future = blockchainService.createSupplyChain(chain.getId());
 
                 // Handle the future completion separately to avoid blocking
                 future.thenAccept(txHash -> {
                     try {
                         // Update in a new transaction
-                        savedChain.setBlockchainTxHash(txHash);
-                        savedChain.setBlockchainStatus("CONFIRMED");
-                        chainRepository.save(savedChain);
+                        chain.setBlockchainTxHash(txHash);
+                        chain.setBlockchainStatus("CONFIRMED");
+                        chainRepository.save(chain);
+                        LOGGER.info("Supply chain " + chain.getId() + " successfully registered on blockchain: " + txHash);
                     } catch (Exception e) {
-                        System.err.println("Error updating blockchain status: " + e.getMessage());
+                        LOGGER.log(Level.SEVERE, "Error updating blockchain status for chain " + chain.getId(), e);
                     }
                 }).exceptionally(ex -> {
                     try {
-                        savedChain.setBlockchainStatus("FAILED");
-                        chainRepository.save(savedChain);
-                        System.err.println("Blockchain transaction failed: " + ex.getMessage());
+                        chain.setBlockchainStatus("FAILED");
+                        chainRepository.save(chain);
+                        LOGGER.log(Level.SEVERE, "Blockchain transaction failed for chain " + chain.getId(), ex);
                     } catch (Exception e) {
-                        System.err.println("Error updating blockchain failure status: " + e.getMessage());
+                        LOGGER.log(Level.SEVERE, "Error updating blockchain failure status for chain " + chain.getId(), e);
                     }
                     return null;
                 });
+            } else {
+                LOGGER.warning("BlockchainService not available - unable to register chain " + chain.getId());
+                chain.setBlockchainStatus("PENDING");
+                chainRepository.save(chain);
             }
         } catch (Exception e) {
             // Log the error but don't prevent chain creation
-            System.err.println("Error with blockchain integration: " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error with blockchain integration for chain " + chain.getId(), e);
+            chain.setBlockchainStatus("FAILED");
+            chainRepository.save(chain);
         }
-
-        // Return the saved chain regardless of blockchain status
-        return savedChain;
     }
 
+    /**
+     * Retry a failed blockchain registration
+     */
+    public boolean retryBlockchainRegistration(Long chainId) {
+        Chains chain = chainRepository.findById(chainId)
+                .orElseThrow(() -> new RuntimeException("Supply chain not found"));
+
+        if (!"FAILED".equals(chain.getBlockchainStatus())) {
+            LOGGER.warning("Cannot retry blockchain registration for chain " + chainId +
+                    " with status " + chain.getBlockchainStatus());
+            return false;
+        }
+
+        chain.setBlockchainStatus("PENDING");
+        chainRepository.save(chain);
+
+        registerSupplyChainOnBlockchain(chain);
+        return true;
+    }
+
+    /**
+     * Get all supply chains with their blockchain status
+     */
     public List<ChainResponse> getAllSupplyChains() {
         return chainRepository.findAll().stream()
                 .map(chain -> new ChainResponse(
                         chain.getId(),
                         chain.getName(),
                         chain.getDescription(),
-                        chain.getCreatedBy(),  // ✅ Pass the Users object, which will be converted to UserResponse in ChainResponse
+                        chain.getCreatedBy(),
                         chain.getNodes().stream()
-                                .map(NodeResponse::new)  // ✅ Correctly calls the constructor that takes a `Nodes` object
+                                .map(NodeResponse::new)
                                 .collect(Collectors.toList()),
                         chain.getEdges().stream()
-                                .map(EdgeResponse::new)  // ✅ This correctly calls the constructor that takes an `Edges` object
+                                .map(EdgeResponse::new)
                                 .collect(Collectors.toList()),
                         chain.getCreatedAt() != null ? chain.getCreatedAt().toInstant() : null,
-                        chain.getUpdatedAt() != null ? chain.getUpdatedAt().toInstant() : null
+                        chain.getUpdatedAt() != null ? chain.getUpdatedAt().toInstant() : null,
+                        chain.getBlockchainStatus(), // Include blockchain status
+                        chain.getBlockchainTxHash() // Include blockchain transaction hash
                 ))
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Get a specific supply chain by ID with blockchain status
+     */
     public ChainResponse getSupplyChain(Long id) {
         Chains chain = chainRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Supply Chain not found"));
@@ -119,22 +168,31 @@ public class ChainService {
                 chain.getId(),
                 chain.getName(),
                 chain.getDescription(),
-                chain.getCreatedBy(),  // ✅ Pass the Users object, which will be converted to UserResponse in ChainResponse
+                chain.getCreatedBy(),
                 chain.getNodes().stream()
-                        .map(NodeResponse::new)  // ✅ Calls the constructor that takes a Nodes object
+                        .map(NodeResponse::new)
                         .collect(Collectors.toList()),
-
                 chain.getEdges().stream()
-                        .map(EdgeResponse::new)  // ✅ Calls the constructor that takes an Edges object
+                        .map(EdgeResponse::new)
                         .collect(Collectors.toList()),
                 chain.getCreatedAt() != null ? chain.getCreatedAt().toInstant() : null,
-                chain.getUpdatedAt() != null ? chain.getUpdatedAt().toInstant() : null
+                chain.getUpdatedAt() != null ? chain.getUpdatedAt().toInstant() : null,
+                chain.getBlockchainStatus(), // Include blockchain status
+                chain.getBlockchainTxHash() // Include blockchain transaction hash
         );
     }
 
+    /**
+     * Update a supply chain - only if not finalized
+     */
     public Chains updateSupplyChain(Long id, Chains updatedChains) {
         Chains existingChains = chainRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Supply Chain not found"));
+
+        // Check if chain is finalized
+        if ("FINALIZED".equals(existingChains.getBlockchainStatus())) {
+            throw new RuntimeException("Cannot update a finalized supply chain");
+        }
 
         if (updatedChains.getName() != null) {
             existingChains.setName(updatedChains.getName());
@@ -206,12 +264,28 @@ public class ChainService {
         return chainRepository.save(existingChains);
     }
 
+    /**
+     * Delete a supply chain - only if not finalized and has failed blockchain status
+     */
     public void deleteSupplyChain(Long id) {
         Chains chain = chainRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Supply Chain not found"));
+
+        // Check if chain is finalized
+        if ("FINALIZED".equals(chain.getBlockchainStatus())) {
+            throw new RuntimeException("Cannot delete a finalized supply chain");
+        }
+
+        // If chain is confirmed on blockchain but not finalized, it shouldn't be deleted
+        if ("CONFIRMED".equals(chain.getBlockchainStatus())) {
+            throw new RuntimeException("Cannot delete a supply chain that is registered on the blockchain");
+        }
+
+        // Only delete if chain has FAILED or PENDING blockchain status
         nodeRepository.deleteAll(chain.getNodes());
         edgeRepository.deleteAll(chain.getEdges());
         chainRepository.delete(chain);
+        LOGGER.info("Deleted supply chain with ID: " + id);
     }
 
     @Transactional
@@ -224,6 +298,7 @@ public class ChainService {
         chain.setUpdatedAt(new Date());
 
         chainRepository.save(chain);
+        LOGGER.info("Updated blockchain status for chain " + chainId + " to CONFIRMED with hash: " + txHash);
     }
 
     public Map<String, Object> getBlockchainStatus(Long chainId) {
@@ -234,6 +309,8 @@ public class ChainService {
         status.put("id", chain.getId());
         status.put("blockchainStatus", chain.getBlockchainStatus());
         status.put("blockchainTxHash", chain.getBlockchainTxHash());
+        status.put("name", chain.getName());
+        status.put("updatedAt", chain.getUpdatedAt());
 
         return status;
     }
@@ -245,11 +322,13 @@ public class ChainService {
                 chain.getId(),
                 chain.getName(),
                 chain.getDescription(),
-                chain.getCreatedBy(),  // ✅ Explicitly passing Users object
-                chain.getNodes().stream().map(NodeResponse::new).collect(Collectors.toList()), // ✅ Convert nodes
-                chain.getEdges().stream().map(EdgeResponse::new).collect(Collectors.toList()), // ✅ Convert edges
-                chain.getCreatedAt() != null ? chain.getCreatedAt().toInstant() : null, // ✅ Handle null dates
-                chain.getUpdatedAt() != null ? chain.getUpdatedAt().toInstant() : null  // ✅ Handle null dates
+                chain.getCreatedBy(),
+                chain.getNodes().stream().map(NodeResponse::new).collect(Collectors.toList()),
+                chain.getEdges().stream().map(EdgeResponse::new).collect(Collectors.toList()),
+                chain.getCreatedAt() != null ? chain.getCreatedAt().toInstant() : null,
+                chain.getUpdatedAt() != null ? chain.getUpdatedAt().toInstant() : null,
+                chain.getBlockchainStatus(),
+                chain.getBlockchainTxHash()
         )).collect(Collectors.toList());
     }
 }
