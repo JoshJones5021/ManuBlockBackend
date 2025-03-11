@@ -160,6 +160,7 @@ public class ChainService {
     /**
      * Get a specific supply chain by ID with blockchain status
      */
+    @Transactional
     public ChainResponse getSupplyChain(Long id) {
         Chains chain = chainRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Supply Chain not found"));

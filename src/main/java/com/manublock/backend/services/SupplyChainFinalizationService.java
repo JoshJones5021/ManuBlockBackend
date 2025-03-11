@@ -73,7 +73,6 @@ public class SupplyChainFinalizationService {
                     "' but no assigned user. Please assign users to all role-specific nodes.");
         }
 
-        // 4. Update chain status
         chain.setUpdatedAt(new Date());
         chain.setBlockchainStatus("FINALIZED");
 
@@ -95,6 +94,7 @@ public class SupplyChainFinalizationService {
                     }
                 });
 
+        // Save ONLY the chain with updated status, not modifying nodes or edges
         return chainRepository.save(chain);
     }
 

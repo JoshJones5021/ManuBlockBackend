@@ -1,6 +1,8 @@
 package com.manublock.backend.controllers;
 
 import com.manublock.backend.dto.ChainResponse;
+import com.manublock.backend.dto.EdgeResponse;
+import com.manublock.backend.dto.NodeResponse;
 import com.manublock.backend.models.Chains;
 import com.manublock.backend.services.BlockchainService;
 import com.manublock.backend.services.ChainService;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/supply-chains")
@@ -129,6 +132,7 @@ public class ChainController {
         }
     }
 
+    // This is a partial update focusing on the finalize endpoint
     @PostMapping("/{id}/finalize")
     public ResponseEntity<?> finalizeSupplyChain(@PathVariable Long id) {
         try {
@@ -154,10 +158,26 @@ public class ChainController {
 
             // Finalize supply chain
             Chains finalizedChain = finalizationService.finalizeSupplyChain(id);
-            return ResponseEntity.ok(Map.of(
-                    "message", "Supply chain finalized successfully",
-                    "status", finalizedChain.getBlockchainStatus()
-            ));
+
+            // Return the complete chain response with nodes and edges
+            ChainResponse response = new ChainResponse(
+                    finalizedChain.getId(),
+                    finalizedChain.getName(),
+                    finalizedChain.getDescription(),
+                    finalizedChain.getCreatedBy(),
+                    finalizedChain.getNodes().stream()
+                            .map(NodeResponse::new)
+                            .collect(Collectors.toList()),
+                    finalizedChain.getEdges().stream()
+                            .map(EdgeResponse::new)
+                            .collect(Collectors.toList()),
+                    finalizedChain.getCreatedAt() != null ? finalizedChain.getCreatedAt().toInstant() : null,
+                    finalizedChain.getUpdatedAt() != null ? finalizedChain.getUpdatedAt().toInstant() : null,
+                    finalizedChain.getBlockchainStatus(),
+                    finalizedChain.getBlockchainTxHash()
+            );
+
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to finalize supply chain: " + e.getMessage()));
