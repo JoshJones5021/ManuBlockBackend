@@ -63,6 +63,13 @@ public class NodeController {
                 }
             }
 
+            // Remove admin ability to set status - will be forced to "pending" in service
+            if (node.getStatus() != null && !node.getStatus().equals("pending")) {
+                // Don't use admin-provided status, but don't return an error
+                // Just inform that the status will be automatically managed
+                node.setStatus("pending");
+            }
+
             Nodes createdNode = nodeService.addNode(supplyChainId, node);
             return ResponseEntity.ok(createdNode);
         } catch (Exception e) {
@@ -125,6 +132,11 @@ public class NodeController {
                     }
                 }
             }
+
+            // Remove admin ability to set status directly - ignore any status changes from the frontend
+            // Preserve existing status - status changes should only come from NodeStatusService
+            Nodes existingNode = nodeService.getNodeById(nodeId);
+            updatedNode.setStatus(existingNode.getStatus());
 
             Nodes node = nodeService.updateNode(nodeId, updatedNode);
             return ResponseEntity.ok(node);

@@ -183,6 +183,14 @@ public class ChainService {
     }
 
     /**
+     * Get a supply chain entity by ID
+     */
+    public Chains getSupplyChainById(Long id) {
+        return chainRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Supply Chain not found"));
+    }
+
+    /**
      * Update a supply chain - only if not finalized
      */
     public Chains updateSupplyChain(Long id, Chains updatedChains) {
@@ -192,6 +200,11 @@ public class ChainService {
         // Check if chain is finalized
         if ("FINALIZED".equals(existingChains.getBlockchainStatus())) {
             throw new RuntimeException("Cannot update a finalized supply chain");
+        }
+
+        // Check if chain has failed blockchain status
+        if ("FAILED".equals(existingChains.getBlockchainStatus())) {
+            throw new RuntimeException("Cannot update a supply chain with failed blockchain status");
         }
 
         if (updatedChains.getName() != null) {
@@ -211,13 +224,15 @@ public class ChainService {
                                 .orElseThrow(() -> new RuntimeException("User not found"));
                         updatedNode.setAssignedUser(user);
                     }
+                    // Force default status for new nodes
+                    updatedNode.setStatus("pending");
                     nodeRepository.save(updatedNode);
                 } else {
                     Nodes existingNode = nodeRepository.findById(updatedNode.getId())
                             .orElseThrow(() -> new RuntimeException("Node not found"));
                     existingNode.setName(updatedNode.getName());
                     existingNode.setRole(updatedNode.getRole());
-                    existingNode.setStatus(updatedNode.getStatus());
+                    // Do not update status from here - only NodeStatusService should change node status
                     existingNode.setX(updatedNode.getX());
                     existingNode.setY(updatedNode.getY());
                     if (updatedNode.getAssignedUser() != null) {

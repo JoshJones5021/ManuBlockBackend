@@ -35,6 +35,10 @@ public class NodeService {
 
         node.setSupplyChain(chain);
 
+        // Force initial status to "pending" regardless of admin input
+        // This ensures consistent initial state and prevents manual status manipulation
+        node.setStatus("pending");
+
         // Ensure assignedUser is properly fetched and set
         if (node.getAssignedUserId() != null) {
             Users user = userRepository.findById(node.getAssignedUserId())
@@ -70,9 +74,9 @@ public class NodeService {
             existingNode.setRole(updatedNode.getRole());
         }
 
-        if (updatedNode.getStatus() != null) {
-            existingNode.setStatus(updatedNode.getStatus());
-        }
+        // Don't allow direct status updates from admin UI
+        // Status should only be changed by the NodeStatusService based on blockchain events
+        // or through specific system operations
 
         if (updatedNode.getX() != 0) {
             existingNode.setX(updatedNode.getX());
