@@ -1,5 +1,6 @@
 package com.manublock.backend.controllers;
 
+import com.manublock.backend.dto.MaterialRequestCreateDTO;
 import com.manublock.backend.dto.MaterialRequestDTO;
 import com.manublock.backend.models.MaterialRequest;
 import com.manublock.backend.models.Product;
@@ -11,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -88,31 +90,21 @@ public class ManufacturerController {
     }
 
     @PostMapping("/materials/request")
-    public ResponseEntity<?> requestMaterials(@RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> requestMaterials(@RequestBody MaterialRequestCreateDTO requestDTO) {
         try {
-            Long manufacturerId = Long.valueOf(payload.get("manufacturerId").toString());
-            Long supplierId = Long.valueOf(payload.get("supplierId").toString());
-            Long supplyChainId = Long.valueOf(payload.get("supplyChainId").toString());
-            Long orderId = payload.get("orderId") != null ?
-                    Long.valueOf(payload.get("orderId").toString()) : null;
-
-            @SuppressWarnings("unchecked")
-            List<ManufacturerService.MaterialRequestItemDTO> items =
-                    (List<ManufacturerService.MaterialRequestItemDTO>) payload.get("items");
-
-            Date requestedDeliveryDate = payload.get("requestedDeliveryDate") != null ?
-                    new Date(Long.parseLong(payload.get("requestedDeliveryDate").toString())) : null;
-
-            String notes = (String) payload.get("notes");
-
-            MaterialRequest materialRequest = manufacturerService.requestMaterials(
-                    manufacturerId, supplierId, supplyChainId, orderId,
-                    items, requestedDeliveryDate, notes);
-
-            return ResponseEntity.ok(materialRequest);
+            MaterialRequest result = manufacturerService.requestMaterials(
+                    requestDTO.getManufacturerId(),
+                    requestDTO.getSupplierId(),
+                    requestDTO.getSupplyChainId(),
+                    requestDTO.getOrderId(),
+                    requestDTO.getItems(),
+                    requestDTO.getRequestedDeliveryDate(),
+                    requestDTO.getNotes()
+            );
+            return ResponseEntity.ok(new MaterialRequestDTO(result));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error requesting materials: " + e.getMessage());
+                    .body("Error creating material request: " + e.getMessage());
         }
     }
 

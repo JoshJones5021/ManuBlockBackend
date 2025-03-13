@@ -1,5 +1,6 @@
 package com.manublock.backend.services;
 
+import com.manublock.backend.dto.MaterialRequestItemCreateDTO;
 import com.manublock.backend.models.*;
 import com.manublock.backend.repositories.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -7,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -137,77 +139,169 @@ public class ManufacturerService {
     /**
      * Request materials from a supplier
      */
-    public MaterialRequest requestMaterials(Long manufacturerId, Long supplierId,
-                                            Long supplyChainId, Long orderId,
-                                            List<MaterialRequestItemDTO> items,
-                                            Date requestedDeliveryDate, String notes) {
+    public MaterialRequest requestMaterials(Long manufacturerId,
+                                            Long supplierId,
+                                            Long supplyChainId,
+                                            Long orderId,
+                                            List<MaterialRequestItemCreateDTO> items,
+                                            Date requestedDeliveryDate,
+                                            String notes) {
+        try {
+            System.out.println("Starting requestMaterials in service - manufacturerId: " + manufacturerId);
 
-        Users manufacturer = userRepository.findById(manufacturerId)
-                .orElseThrow(() -> new RuntimeException("Manufacturer not found"));
+            Users manufacturer = userRepository.findById(manufacturerId)
+                    .orElseThrow(() -> {
+                        System.err.println("Manufacturer not found with ID: " + manufacturerId);
+                        return new RuntimeException("Manufacturer not found with ID: " + manufacturerId);
+                    });
 
-        Users supplier = userRepository.findById(supplierId)
-                .orElseThrow(() -> new RuntimeException("Supplier not found"));
+            Users supplier = userRepository.findById(supplierId)
+                    .orElseThrow(() -> {
+                        System.err.println("Supplier not found with ID: " + supplierId);
+                        return new RuntimeException("Supplier not found with ID: " + supplierId);
+                    });
 
-        Chains supplyChain = chainRepository.findById(supplyChainId)
-                .orElseThrow(() -> new RuntimeException("Supply chain not found"));
+            Chains supplyChain = chainRepository.findById(supplyChainId)
+                    .orElseThrow(() -> {
+                        System.err.println("Supply chain not found with ID: " + supplyChainId);
+                        return new RuntimeException("Supply chain not found with ID: " + supplyChainId);
+                    });
 
-        // Optionally link to an order
-        Order relatedOrder = null;
-        if (orderId != null) {
-            relatedOrder = orderRepository.findById(orderId)
-                    .orElseThrow(() -> new RuntimeException("Order not found"));
-        }
-
-        // Validate items
-        for (MaterialRequestItemDTO item : items) {
-            Material material = materialRepository.findById(item.getMaterialId())
-                    .orElseThrow(() -> new RuntimeException("Material not found: " + item.getMaterialId()));
-
-            if (!material.isActive()) {
-                throw new RuntimeException("Material is not active: " + material.getName());
+            // Optionally link to an order
+            Order relatedOrder = null;
+            if (orderId != null) {
+                try {
+                    relatedOrder = orderRepository.findById(orderId)
+                            .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
+                    System.out.println("Related order found: " + relatedOrder.getId());
+                } catch (Exception e) {
+                    System.err.println("Error finding related order: " + e.getMessage());
+                    // Continue without the order
+                }
             }
 
-            if (!material.getSupplier().getId().equals(supplierId)) {
-                throw new RuntimeException("Material is not provided by the selected supplier: " + material.getName());
+            // Validate items
+            System.out.println("Validating " + (items != null ? items.size() : "null") + " material items");
+            if (items == null || items.isEmpty()) {
+                System.err.println("No items provided in the request");
+                throw new RuntimeException("No materials specified for the request");
             }
+
+            for (MaterialRequestItemCreateDTO item : items) {
+                try {
+                    System.out.println("Validating material ID: " + item.getMaterialId() +
+                            ", Quantity: " + item.getQuantity());
+
+                    Material material = materialRepository.findById(item.getMaterialId())
+                            .orElseThrow(() -> new RuntimeException("Material not found: " + item.getMaterialId()));
+
+                    if (!material.isActive()) {
+                        System.err.println("Material is not active: " + material.getName());
+                        throw new RuntimeException("Material is not active: " + material.getName());
+                    }
+
+                    if (!material.getSupplier().getId().equals(supplierId)) {
+                        System.err.println("Material is not provided by the selected supplier: " + material.getName());
+                        throw new RuntimeException("Material is not provided by the selected supplier: " + material.getName());
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error validating material item: " + e.getMessage());
+                    throw e;
+                }
+            }
+
+            // Generate request number
+            String requestNumber = "REQ-" + Calendar.getInstance().getTimeInMillis();
+            System.out.println("Generated request number: " + requestNumber);
+
+            // Create material request
+            MaterialRequest request = new MaterialRequest();
+            request.setRequestNumber(requestNumber);
+            request.setManufacturer(manufacturer);
+            request.setSupplier(supplier);
+            request.setSupplyChain(supplyChain);
+            request.setRelatedOrder(relatedOrder);
+            request.setStatus("Requested"); // Using default status if not provided
+            request.setRequestedDeliveryDate(requestedDeliveryDate);
+            request.setNotes(notes);
+            request.setCreatedAt(new Date());
+            request.setUpdatedAt(new Date());
+
+            System.out.println("Saving material request");
+            MaterialRequest savedRequest = materialRequestRepository.save(request);
+            System.out.println("Material request saved with ID: " + savedRequest.getId());
+
+            // Create request items - Fixed the type mismatch here
+            List<MaterialRequestItem> requestItems = new ArrayList<>();
+            for (MaterialRequestItemCreateDTO item : items) {  // Changed from MaterialRequestItemDTO to MaterialRequestItemCreateDTO
+                try {
+                    Material material = materialRepository.findById(item.getMaterialId()).get();
+                    System.out.println("Creating item for material: " + material.getName() +
+                            ", quantity: " + item.getQuantity());
+
+                    MaterialRequestItem requestItem = new MaterialRequestItem();
+                    requestItem.setMaterialRequest(savedRequest);
+                    requestItem.setMaterial(material);
+                    requestItem.setRequestedQuantity(item.getQuantity());
+                    requestItem.setStatus("Requested");
+
+                    MaterialRequestItem savedItem = materialRequestItemRepository.save(requestItem);
+                    System.out.println("Material request item saved with ID: " + savedItem.getId());
+                    requestItems.add(savedItem);
+                } catch (Exception e) {
+                    System.err.println("Error saving material request item: " + e.getMessage());
+                    throw e;
+                }
+            }
+            // Update request with items
+            savedRequest.setItems(requestItems);
+            // Now record on blockchain if blockchain service is available
+            if (blockchainService != null) {
+                try {
+                    System.out.println("Recording material request on blockchain...");
+
+                    Long blockchainItemId = generateUniqueBlockchainId();
+
+                    Long totalQuantity = items.stream()
+                            .mapToLong(MaterialRequestItemCreateDTO::getQuantity)
+                            .sum();
+
+                    // The actual method call depends on your BlockchainService implementation
+                    // This is a simplified example:
+                    CompletableFuture<String> future = blockchainService.createItem(
+                            blockchainItemId,       // A unique ID for this material request
+                            supplyChainId,          // The supply chain ID
+                            totalQuantity,          // Use total quantity from all items (must be positive)
+                            "material-request"      // Type of the item
+                    );
+
+                    // Handle the future completion asynchronously to avoid blocking
+                    future.thenAccept(txHash -> {
+                        try {
+                            // Update the request with blockchain transaction hash
+                            savedRequest.setBlockchainTxHash(txHash);
+                            materialRequestRepository.save(savedRequest);
+                            System.out.println("Material request recorded on blockchain: " + txHash);
+                        } catch (Exception e) {
+                            System.err.println("Error updating blockchain status: " + e.getMessage());
+                        }
+                    }).exceptionally(ex -> {
+                        System.err.println("Blockchain transaction failed: " + ex.getMessage());
+                        return null;
+                    });
+                } catch (Exception e) {
+                    // Log error but don't prevent request creation if blockchain fails
+                    System.err.println("Error with blockchain integration: " + e.getMessage());
+                }
+            }
+
+            System.out.println("Material request process completed successfully");
+            return savedRequest;
+        } catch (Exception e) {
+            System.err.println("Error in requestMaterials service method: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
         }
-
-        // Generate request number
-        String requestNumber = "REQ-" + Calendar.getInstance().getTimeInMillis();
-
-        // Create material request
-        MaterialRequest request = new MaterialRequest();
-        request.setRequestNumber(requestNumber);
-        request.setManufacturer(manufacturer);
-        request.setSupplier(supplier);
-        request.setSupplyChain(supplyChain);
-        request.setRelatedOrder(relatedOrder);
-        request.setStatus("Requested");
-        request.setRequestedDeliveryDate(requestedDeliveryDate);
-        request.setNotes(notes);
-        request.setCreatedAt(new Date());
-        request.setUpdatedAt(new Date());
-
-        MaterialRequest savedRequest = materialRequestRepository.save(request);
-
-        // Create request items
-        List<MaterialRequestItem> requestItems = new ArrayList<>();
-        for (MaterialRequestItemDTO item : items) {
-            Material material = materialRepository.findById(item.getMaterialId()).get();
-
-            MaterialRequestItem requestItem = new MaterialRequestItem();
-            requestItem.setMaterialRequest(savedRequest);
-            requestItem.setMaterial(material);
-            requestItem.setRequestedQuantity(item.getQuantity());
-            requestItem.setStatus("Requested");
-
-            requestItems.add(materialRequestItemRepository.save(requestItem));
-        }
-
-        // Update request with items
-        savedRequest.setItems(requestItems);
-
-        return savedRequest;
     }
 
     /**
