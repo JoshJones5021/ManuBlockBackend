@@ -1,8 +1,8 @@
 package com.manublock.backend.services;
 
-import com.manublock.backend.dto.ChainResponse;
-import com.manublock.backend.dto.NodeResponse;
-import com.manublock.backend.dto.EdgeResponse;
+import com.manublock.backend.dto.ChainResponseDTO;
+import com.manublock.backend.dto.NodeResponseDTO;
+import com.manublock.backend.dto.EdgeResponseDTO;
 import com.manublock.backend.models.Edges;
 import com.manublock.backend.models.Chains;
 import com.manublock.backend.models.Nodes;
@@ -136,18 +136,18 @@ public class ChainService {
     /**
      * Get all supply chains with their blockchain status
      */
-    public List<ChainResponse> getAllSupplyChains() {
+    public List<ChainResponseDTO> getAllSupplyChains() {
         return chainRepository.findAll().stream()
-                .map(chain -> new ChainResponse(
+                .map(chain -> new ChainResponseDTO(
                         chain.getId(),
                         chain.getName(),
                         chain.getDescription(),
                         chain.getCreatedBy(),
                         chain.getNodes().stream()
-                                .map(NodeResponse::new)
+                                .map(NodeResponseDTO::new)
                                 .collect(Collectors.toList()),
                         chain.getEdges().stream()
-                                .map(EdgeResponse::new)
+                                .map(EdgeResponseDTO::new)
                                 .collect(Collectors.toList()),
                         chain.getCreatedAt() != null ? chain.getCreatedAt().toInstant() : null,
                         chain.getUpdatedAt() != null ? chain.getUpdatedAt().toInstant() : null,
@@ -161,20 +161,20 @@ public class ChainService {
      * Get a specific supply chain by ID with blockchain status
      */
     @Transactional
-    public ChainResponse getSupplyChain(Long id) {
+    public ChainResponseDTO getSupplyChain(Long id) {
         Chains chain = chainRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Supply Chain not found"));
 
-        return new ChainResponse(
+        return new ChainResponseDTO(
                 chain.getId(),
                 chain.getName(),
                 chain.getDescription(),
                 chain.getCreatedBy(),
                 chain.getNodes().stream()
-                        .map(NodeResponse::new)
+                        .map(NodeResponseDTO::new)
                         .collect(Collectors.toList()),
                 chain.getEdges().stream()
-                        .map(EdgeResponse::new)
+                        .map(EdgeResponseDTO::new)
                         .collect(Collectors.toList()),
                 chain.getCreatedAt() != null ? chain.getCreatedAt().toInstant() : null,
                 chain.getUpdatedAt() != null ? chain.getUpdatedAt().toInstant() : null,
@@ -331,16 +331,16 @@ public class ChainService {
         return status;
     }
 
-    public List<ChainResponse> findSupplyChainsByUserId(Long userId) {
+    public List<ChainResponseDTO> findSupplyChainsByUserId(Long userId) {
         List<Chains> userChains = chainRepository.findChainsByAssignedUser(userId);
 
-        return userChains.stream().map(chain -> new ChainResponse(
+        return userChains.stream().map(chain -> new ChainResponseDTO(
                 chain.getId(),
                 chain.getName(),
                 chain.getDescription(),
                 chain.getCreatedBy(),
-                chain.getNodes().stream().map(NodeResponse::new).collect(Collectors.toList()),
-                chain.getEdges().stream().map(EdgeResponse::new).collect(Collectors.toList()),
+                chain.getNodes().stream().map(NodeResponseDTO::new).collect(Collectors.toList()),
+                chain.getEdges().stream().map(EdgeResponseDTO::new).collect(Collectors.toList()),
                 chain.getCreatedAt() != null ? chain.getCreatedAt().toInstant() : null,
                 chain.getUpdatedAt() != null ? chain.getUpdatedAt().toInstant() : null,
                 chain.getBlockchainStatus(),

@@ -1,5 +1,6 @@
 package com.manublock.backend.controllers;
 
+import com.manublock.backend.dto.MaterialRequestDTO;
 import com.manublock.backend.models.MaterialRequest;
 import com.manublock.backend.models.Product;
 import com.manublock.backend.models.ProductionBatch;
@@ -13,6 +14,7 @@ import java.math.BigDecimal;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/manufacturer")
@@ -193,8 +195,15 @@ public class ManufacturerController {
     @GetMapping("/materials/requests/{manufacturerId}")
     public ResponseEntity<?> getRequestsByManufacturer(@PathVariable Long manufacturerId) {
         try {
+            // Get the material requests from the service
             List<MaterialRequest> requests = manufacturerService.getRequestsByManufacturer(manufacturerId);
-            return ResponseEntity.ok(requests);
+
+            // Convert to DTOs to prevent circular references
+            List<MaterialRequestDTO> requestDTOs = requests.stream()
+                    .map(MaterialRequestDTO::new)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(requestDTOs);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving material requests: " + e.getMessage());

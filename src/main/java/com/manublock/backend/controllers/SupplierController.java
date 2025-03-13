@@ -1,5 +1,6 @@
 package com.manublock.backend.controllers;
 
+import com.manublock.backend.dto.MaterialRequestDTO;
 import com.manublock.backend.models.Material;
 import com.manublock.backend.models.MaterialRequest;
 import com.manublock.backend.services.SupplierService;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/supplier")
@@ -140,8 +142,14 @@ public class SupplierController {
     @GetMapping("/requests/pending/{supplierId}")
     public ResponseEntity<?> getPendingRequests(@PathVariable Long supplierId) {
         try {
-            List<MaterialRequest> requests = supplierService.getPendingRequests(supplierId);
-            return ResponseEntity.ok(requests);
+            List<MaterialRequest> pendingRequests = supplierService.getPendingRequests(supplierId);
+
+            // Convert to DTOs to prevent circular references
+            List<MaterialRequestDTO> requestDTOs = pendingRequests.stream()
+                    .map(MaterialRequestDTO::new)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(requestDTOs);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving pending requests: " + e.getMessage());
@@ -154,7 +162,13 @@ public class SupplierController {
             @PathVariable String status) {
         try {
             List<MaterialRequest> requests = supplierService.getRequestsByStatus(supplierId, status);
-            return ResponseEntity.ok(requests);
+
+            // Convert to DTOs to prevent circular references
+            List<MaterialRequestDTO> requestDTOs = requests.stream()
+                    .map(MaterialRequestDTO::new)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(requestDTOs);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving requests: " + e.getMessage());

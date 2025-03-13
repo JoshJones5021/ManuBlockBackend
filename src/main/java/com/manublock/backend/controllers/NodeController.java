@@ -1,6 +1,6 @@
 package com.manublock.backend.controllers;
 
-import com.manublock.backend.dto.NodeResponse;
+import com.manublock.backend.dto.NodeResponseDTO;
 import com.manublock.backend.models.Nodes;
 import com.manublock.backend.models.Users;
 import com.manublock.backend.services.NodeService;
@@ -91,7 +91,7 @@ public class NodeController {
     ) {
         try {
             Nodes node = nodeService.getNodeById(nodeId);
-            return ResponseEntity.ok(new NodeResponse(node));
+            return ResponseEntity.ok(new NodeResponseDTO(node));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("error", "Node not found: " + e.getMessage()));

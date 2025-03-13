@@ -1,6 +1,6 @@
 package com.manublock.backend.dto;
 
-public class LoginRequest {
+public class LoginRequestDTO {
     private String email;
     private String password;
 

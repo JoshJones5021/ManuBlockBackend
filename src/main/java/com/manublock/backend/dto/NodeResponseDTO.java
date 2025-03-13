@@ -2,7 +2,7 @@ package com.manublock.backend.dto;
 
 import com.manublock.backend.models.Nodes;
 
-public class NodeResponse {
+public class NodeResponseDTO {
     private Long id;
     private String name;
     private String role;
@@ -12,7 +12,7 @@ public class NodeResponse {
     private Long assignedUserId;
 
     // ✅ Constructor accepting a `Nodes` object
-    public NodeResponse(Nodes node) {
+    public NodeResponseDTO(Nodes node) {
         this.id = node.getId();
         this.name = node.getName();
         this.role = node.getRole();

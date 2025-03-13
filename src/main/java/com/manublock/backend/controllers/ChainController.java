@@ -1,8 +1,8 @@
 package com.manublock.backend.controllers;
 
-import com.manublock.backend.dto.ChainResponse;
-import com.manublock.backend.dto.EdgeResponse;
-import com.manublock.backend.dto.NodeResponse;
+import com.manublock.backend.dto.ChainResponseDTO;
+import com.manublock.backend.dto.EdgeResponseDTO;
+import com.manublock.backend.dto.NodeResponseDTO;
 import com.manublock.backend.models.Chains;
 import com.manublock.backend.services.BlockchainService;
 import com.manublock.backend.services.ChainService;
@@ -71,12 +71,12 @@ public class ChainController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ChainResponse> getSupplyChainById(@PathVariable Long id) {
+    public ResponseEntity<ChainResponseDTO> getSupplyChainById(@PathVariable Long id) {
         return ResponseEntity.ok(chainService.getSupplyChain(id));
     }
 
     @GetMapping
-    public List<ChainResponse> getAllSupplyChains() {
+    public List<ChainResponseDTO> getAllSupplyChains() {
         return chainService.getAllSupplyChains();
     }
 
@@ -124,7 +124,7 @@ public class ChainController {
     @GetMapping("/user/{userId}")
     public ResponseEntity<?> getSupplyChainsByUserId(@PathVariable Long userId) {
         try {
-            List<ChainResponse> supplyChains = chainService.findSupplyChainsByUserId(userId);
+            List<ChainResponseDTO> supplyChains = chainService.findSupplyChainsByUserId(userId);
             return ResponseEntity.ok(supplyChains);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -160,16 +160,16 @@ public class ChainController {
             Chains finalizedChain = finalizationService.finalizeSupplyChain(id);
 
             // Return the complete chain response with nodes and edges
-            ChainResponse response = new ChainResponse(
+            ChainResponseDTO response = new ChainResponseDTO(
                     finalizedChain.getId(),
                     finalizedChain.getName(),
                     finalizedChain.getDescription(),
                     finalizedChain.getCreatedBy(),
                     finalizedChain.getNodes().stream()
-                            .map(NodeResponse::new)
+                            .map(NodeResponseDTO::new)
                             .collect(Collectors.toList()),
                     finalizedChain.getEdges().stream()
-                            .map(EdgeResponse::new)
+                            .map(EdgeResponseDTO::new)
                             .collect(Collectors.toList()),
                     finalizedChain.getCreatedAt() != null ? finalizedChain.getCreatedAt().toInstant() : null,
                     finalizedChain.getUpdatedAt() != null ? finalizedChain.getUpdatedAt().toInstant() : null,

@@ -1,7 +1,7 @@
 package com.manublock.backend.services;
 
-import com.manublock.backend.dto.RegisterUserRequest;
-import com.manublock.backend.dto.UserResponse;
+import com.manublock.backend.dto.RegisterUserRequestDTO;
+import com.manublock.backend.dto.UserResponseDTO;
 import com.manublock.backend.models.Chains;
 import com.manublock.backend.models.Nodes;
 import com.manublock.backend.models.Users;
@@ -45,7 +45,7 @@ public class UserService {
         return user;
     }
 
-    public void registerUser(RegisterUserRequest request) {
+    public void registerUser(RegisterUserRequestDTO request) {
         Optional<Users> existingUserByEmail = userRepository.findByEmail(request.getEmail());
         if (existingUserByEmail.isPresent()) {
             throw new CustomException("User with this email already exists.");
@@ -83,9 +83,9 @@ public class UserService {
         return userRepository.save(user);
     }
 
-    public List<UserResponse> getAllUsers() {
+    public List<UserResponseDTO> getAllUsers() {
         return userRepository.findAll().stream()
-                .map(UserResponse::new)
+                .map(UserResponseDTO::new)
                 .collect(Collectors.toList());
     }
 

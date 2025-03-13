@@ -1,6 +1,6 @@
 package com.manublock.backend.controllers;
 
-import com.manublock.backend.dto.EdgeResponse;
+import com.manublock.backend.dto.EdgeResponseDTO;
 import com.manublock.backend.models.Edges;
 import com.manublock.backend.services.EdgeService;
 import com.manublock.backend.services.SupplyChainFinalizationService;
@@ -50,10 +50,10 @@ public class EdgeController {
     }
 
     @GetMapping
-    public ResponseEntity<List<EdgeResponse>> getEdges(@PathVariable Long supplyChainId) {
+    public ResponseEntity<List<EdgeResponseDTO>> getEdges(@PathVariable Long supplyChainId) {
         List<Edges> edges = edgeService.getEdgesBySupplyChainId(supplyChainId);
-        List<EdgeResponse> response = edges.stream()
-                .map(EdgeResponse::new)
+        List<EdgeResponseDTO> response = edges.stream()
+                .map(EdgeResponseDTO::new)
                 .toList();
         return ResponseEntity.ok(response);
     }
@@ -71,7 +71,7 @@ public class EdgeController {
                         .body(Map.of("error", "Edge has invalid source or target nodes"));
             }
 
-            return ResponseEntity.ok(new EdgeResponse(edge));
+            return ResponseEntity.ok(new EdgeResponseDTO(edge));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("error", "Connection not found: " + e.getMessage()));
@@ -127,8 +127,8 @@ public class EdgeController {
     public ResponseEntity<?> getEdgesByNode(@PathVariable Long supplyChainId, @PathVariable Long nodeId) {
         try {
             List<Edges> edges = edgeService.getEdgesByNode(nodeId);
-            List<EdgeResponse> response = edges.stream()
-                    .map(EdgeResponse::new)
+            List<EdgeResponseDTO> response = edges.stream()
+                    .map(EdgeResponseDTO::new)
                     .toList();
             return ResponseEntity.ok(response);
         } catch (Exception e) {

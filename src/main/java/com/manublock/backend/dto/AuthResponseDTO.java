@@ -1,10 +1,10 @@
 package com.manublock.backend.dto;
 
-public class AuthResponse {
+public class AuthResponseDTO {
     private String token;
     private String walletAddress;
 
-    public AuthResponse(String token, String walletAddress) {
+    public AuthResponseDTO(String token, String walletAddress) {
         this.token = token;
         this.walletAddress = walletAddress;
     }

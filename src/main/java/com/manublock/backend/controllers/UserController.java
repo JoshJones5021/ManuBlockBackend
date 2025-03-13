@@ -1,23 +1,25 @@
 package com.manublock.backend.controllers;
 
-import com.manublock.backend.dto.UserResponse;
+import com.manublock.backend.dto.UserResponseDTO;
 import com.manublock.backend.models.Roles;
 import com.manublock.backend.models.Users;
 import com.manublock.backend.services.UserService;
 import com.manublock.backend.utils.JwtUtil;
-import com.manublock.backend.dto.AuthResponse;
-import com.manublock.backend.dto.LoginRequest;
-import com.manublock.backend.dto.RegisterUserRequest;
+import com.manublock.backend.dto.AuthResponseDTO;
+import com.manublock.backend.dto.LoginRequestDTO;
+import com.manublock.backend.dto.RegisterUserRequestDTO;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
+import com.manublock.backend.repositories.UserRepository;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/users")
@@ -25,25 +27,27 @@ import java.util.Optional;
 public class UserController {
     private final UserService userService;
     private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
-    public UserController(UserService userService, JwtUtil jwtUtil) {
+    public UserController(UserService userService, JwtUtil jwtUtil, UserRepository userRepository) {
         this.userService = userService;
         this.jwtUtil = jwtUtil;
+        this.userRepository = userRepository;
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterUserRequest request) {
+    public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterUserRequestDTO request) {
         userService.registerUser(request);
         return ResponseEntity.ok().body("User registered successfully!");
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> loginUser(@RequestBody LoginRequest loginRequest) {
-        Users user = userService.authenticateUser(loginRequest.getEmail(), loginRequest.getPassword());
+    public ResponseEntity<AuthResponseDTO> loginUser(@RequestBody LoginRequestDTO loginRequestDTO) {
+        Users user = userService.authenticateUser(loginRequestDTO.getEmail(), loginRequestDTO.getPassword());
         String token = jwtUtil.generateToken(user);
 
         // Include walletAddress in the response
-        return ResponseEntity.ok(new AuthResponse(token, user.getWalletAddress()));
+        return ResponseEntity.ok(new AuthResponseDTO(token, user.getWalletAddress()));
     }
 
     @PostMapping("/logout")
@@ -86,12 +90,32 @@ public class UserController {
     }
 
     @GetMapping(value = {"/", ""})
-    public ResponseEntity<?> getAllUsers() {
+    public ResponseEntity<?> getAllUsers(@RequestParam(required = false) String role) {
         try {
-            List<UserResponse> users = userService.getAllUsers();
-            return ResponseEntity.ok(users);
+            List<Users> users;
+
+            if (role != null && !role.isEmpty()) {
+                // Get users by role if role parameter is provided
+                try {
+                    Roles userRole = Roles.valueOf(role.toUpperCase());
+                    users = userRepository.findByRole(userRole);
+                } catch (IllegalArgumentException e) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Invalid role: " + role));
+                }
+            } else {
+                // Get all users if no role is specified
+                users = userRepository.findAll();
+            }
+
+            // Convert to DTOs to prevent circular references
+            List<UserResponseDTO> userDTOs = users.stream()
+                    .map(UserResponseDTO::new)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(userDTOs);
         } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("error", "Failed to fetch users"));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error retrieving users: " + e.getMessage()));
         }
     }
 

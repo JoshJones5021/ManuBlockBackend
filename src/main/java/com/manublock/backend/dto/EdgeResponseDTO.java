@@ -2,7 +2,7 @@ package com.manublock.backend.dto;
 
 import com.manublock.backend.models.Edges;
 
-public class EdgeResponse {
+public class EdgeResponseDTO {
     private Long id;
     private NodeReference source;
     private NodeReference target;
@@ -11,7 +11,7 @@ public class EdgeResponse {
     private Integer strokeWidth;
 
     // ✅ Constructor that accepts an Edges object
-    public EdgeResponse(Edges edge) {
+    public EdgeResponseDTO(Edges edge) {
         this.id = edge.getId();
         this.source = edge.getSource() != null ? new NodeReference(edge.getSource().getId(), edge.getSource().getName()) : null;
         this.target = edge.getTarget() != null ? new NodeReference(edge.getTarget().getId(), edge.getTarget().getName()) : null;
