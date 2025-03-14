@@ -123,6 +123,23 @@ public class ManufacturerService {
         return productRepository.save(product);
     }
 
+    public List<Material> getAvailableMaterialsForManufacturer(Long manufacturerId) {
+        // Find all material requests that have been delivered to this manufacturer
+        List<MaterialRequest> deliveredRequests = materialRequestRepository
+                .findByManufacturer_IdAndStatus(manufacturerId, "Delivered");
+
+        // Extract all materials from these requests
+        Set<Long> materialIds = new HashSet<>();
+        for (MaterialRequest request : deliveredRequests) {
+            for (MaterialRequestItem item : request.getItems()) {
+                materialIds.add(item.getMaterial().getId());
+            }
+        }
+
+        // Fetch all these materials
+        return materialRepository.findAllById(materialIds);
+    }
+
     /**
      * Deactivate a product (logical deletion)
      */

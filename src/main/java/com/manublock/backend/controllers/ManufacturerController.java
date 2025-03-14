@@ -2,6 +2,7 @@ package com.manublock.backend.controllers;
 
 import com.manublock.backend.dto.MaterialRequestCreateDTO;
 import com.manublock.backend.dto.MaterialRequestDTO;
+import com.manublock.backend.models.Material;
 import com.manublock.backend.models.MaterialRequest;
 import com.manublock.backend.models.Product;
 import com.manublock.backend.models.ProductionBatch;
@@ -170,6 +171,18 @@ public class ManufacturerController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving products: " + e.getMessage());
+        }
+    }
+
+    // In MaterialController or ManufacturerController
+    @GetMapping("/materials/available/{manufacturerId}")
+    public ResponseEntity<?> getAvailableMaterials(@PathVariable Long manufacturerId) {
+        try {
+            List<Material> materials = manufacturerService.getAvailableMaterialsForManufacturer(manufacturerId);
+            return ResponseEntity.ok(materials);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error retrieving available materials: " + e.getMessage());
         }
     }
 

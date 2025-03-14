@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class DistributorService {
@@ -149,13 +150,32 @@ public class DistributorService {
             // Record blockchain transfer for each item
             materialRequest.getItems().forEach(item -> {
                 if (item.getBlockchainItemId() != null) {
-                    // Transfer ownership from supplier to distributor
-                    blockchainService.transferItem(
-                            item.getBlockchainItemId(),
-                            transport.getDistributor().getWalletAddress(),
-                            item.getAllocatedQuantity(),
-                            "material-pickup"
-                    );
+                    try {
+                        // Get the destination wallet address, defaulting to a zero address if not present
+                        String destinationWallet = Optional.ofNullable(transport.getDistributor().getWalletAddress())
+                                .filter(addr -> !addr.isEmpty())
+                                .orElse("0x0000000000000000000000000000000000000001"); // Designated zero address
+
+                        // Make the action type more descriptive for tracking
+                        String actionType = "material-pickup:distributor:" + transport.getDistributor().getId();
+
+                        blockchainService.transferItem(
+                                item.getBlockchainItemId(),
+                                destinationWallet,
+                                item.getAllocatedQuantity(),
+                                actionType
+                        ).thenAccept(txHash -> {
+                            // Store the transaction hash
+                            transport.setBlockchainTxHash(txHash);
+                            transportRepository.save(transport);
+                            System.out.println("Blockchain transfer recorded with hash: " + txHash);
+                        }).exceptionally(ex -> {
+                            System.err.println("Blockchain transfer failed: " + ex.getMessage());
+                            return null;
+                        });
+                    } catch (Exception e) {
+                        System.err.println("Error preparing blockchain transfer: " + e.getMessage());
+                    }
                 }
             });
         } else if (transport.getType().equals("Product Delivery")) {
@@ -183,6 +203,7 @@ public class DistributorService {
     /**
      * Record delivery of items
      */
+    // Update the recordDelivery method in DistributorService.java
     public Transport recordDelivery(Long transportId) {
         Transport transport = transportRepository.findById(transportId)
                 .orElseThrow(() -> new RuntimeException("Transport not found"));
@@ -203,16 +224,33 @@ public class DistributorService {
             materialRequest.setActualDeliveryDate(new Date());
             materialRequestRepository.save(materialRequest);
 
-            // Record blockchain transfer for each item
+            // Record blockchain transfer for each item with null check for wallet address
             materialRequest.getItems().forEach(item -> {
                 if (item.getBlockchainItemId() != null) {
-                    // Transfer ownership from distributor to manufacturer
-                    blockchainService.transferItem(
-                            item.getBlockchainItemId(),
-                            transport.getDestination().getWalletAddress(),
-                            item.getAllocatedQuantity(),
-                            "material-delivery"
-                    );
+                    try {
+                        // Get destination wallet with fallback to zero address
+                        String destinationWallet = Optional.ofNullable(transport.getDestination().getWalletAddress())
+                                .filter(addr -> !addr.isEmpty())
+                                .orElse("0x0000000000000000000000000000000000000001");
+
+                        String actionType = "material-delivery:manufacturer:" + transport.getDestination().getId();
+
+                        blockchainService.transferItem(
+                                item.getBlockchainItemId(),
+                                destinationWallet,
+                                item.getAllocatedQuantity(),
+                                actionType
+                        ).thenAccept(txHash -> {
+                            transport.setBlockchainTxHash(txHash);
+                            transportRepository.save(transport);
+                            System.out.println("Blockchain delivery recorded with hash: " + txHash);
+                        }).exceptionally(ex -> {
+                            System.err.println("Blockchain delivery failed: " + ex.getMessage());
+                            return null;
+                        });
+                    } catch (Exception e) {
+                        System.err.println("Error preparing blockchain delivery: " + e.getMessage());
+                    }
                 }
             });
         } else if (transport.getType().equals("Product Delivery")) {
@@ -220,22 +258,38 @@ public class DistributorService {
             order.setStatus("Delivered");
             orderRepository.save(order);
 
-            // Record blockchain transfer for each item
+            // Record blockchain transfer for each item with null check for wallet address
             order.getItems().forEach(item -> {
                 if (item.getBlockchainItemId() != null) {
-                    // Transfer ownership from distributor to customer
-                    blockchainService.transferItem(
-                            item.getBlockchainItemId(),
-                            transport.getDestination().getWalletAddress(),
-                            item.getQuantity(),
-                            "product-delivery"
-                    );
+                    try {
+                        // Get destination wallet with fallback to zero address
+                        String destinationWallet = Optional.ofNullable(transport.getDestination().getWalletAddress())
+                                .filter(addr -> !addr.isEmpty())
+                                .orElse("0x0000000000000000000000000000000000000001");
+
+                        String actionType = "product-delivery:customer:" + transport.getDestination().getId();
+
+                        blockchainService.transferItem(
+                                item.getBlockchainItemId(),
+                                destinationWallet,
+                                item.getQuantity(),
+                                actionType
+                        ).thenAccept(txHash -> {
+                            transport.setBlockchainTxHash(txHash);
+                            transportRepository.save(transport);
+                            System.out.println("Blockchain delivery recorded with hash: " + txHash);
+                        }).exceptionally(ex -> {
+                            System.err.println("Blockchain delivery failed: " + ex.getMessage());
+                            return null;
+                        });
+                    } catch (Exception e) {
+                        System.err.println("Error preparing blockchain delivery: " + e.getMessage());
+                    }
                 }
             });
         }
 
         Transport savedTransport = transportRepository.save(transport);
-
         return savedTransport;
     }
 

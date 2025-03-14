@@ -1,5 +1,7 @@
 package com.manublock.backend.controllers;
 
+import com.manublock.backend.dto.MaterialRequestDTO;
+import com.manublock.backend.dto.TransportDTO;
 import com.manublock.backend.models.MaterialRequest;
 import com.manublock.backend.models.Order;
 import com.manublock.backend.models.Transport;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/distributor")
@@ -94,7 +97,13 @@ public class DistributorController {
     public ResponseEntity<?> getTransportsByDistributor(@PathVariable Long distributorId) {
         try {
             List<Transport> transports = distributorService.getTransportsByDistributor(distributorId);
-            return ResponseEntity.ok(transports);
+
+            // Convert to DTOs to prevent circular references
+            List<TransportDTO> transportDTOs = transports.stream()
+                    .map(TransportDTO::new)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(transportDTOs);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving transports: " + e.getMessage());
@@ -142,7 +151,13 @@ public class DistributorController {
     public ResponseEntity<?> getReadyMaterialRequests() {
         try {
             List<MaterialRequest> requests = distributorService.getReadyMaterialRequests();
-            return ResponseEntity.ok(requests);
+
+            // Convert to DTOs to prevent circular references
+            List<MaterialRequestDTO> requestDTOs = requests.stream()
+                    .map(MaterialRequestDTO::new)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(requestDTOs);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving ready material requests: " + e.getMessage());
