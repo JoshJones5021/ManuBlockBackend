@@ -200,7 +200,8 @@ public class SupplierService {
                     blockchainItemId,
                     inputQuantities,
                     approvedQuantity,
-                    "allocated-material"
+                    "allocated-material",
+                    request.getSupplier().getId()  // User ID of the processor (supplier)
             );
         }
 

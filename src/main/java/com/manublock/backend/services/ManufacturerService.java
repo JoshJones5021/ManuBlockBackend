@@ -284,12 +284,12 @@ public class ManufacturerService {
                             .sum();
 
                     // The actual method call depends on your BlockchainService implementation
-                    // This is a simplified example:
                     CompletableFuture<String> future = blockchainService.createItem(
                             blockchainItemId,       // A unique ID for this material request
                             supplyChainId,          // The supply chain ID
                             totalQuantity,          // Use total quantity from all items (must be positive)
-                            "material-request"      // Type of the item
+                            "material-request",     // Type of the item
+                            manufacturerId          // User ID of the creator
                     );
 
                     // Handle the future completion asynchronously to avoid blocking
@@ -401,7 +401,8 @@ public class ManufacturerService {
                         blockchainItemId,
                         inputQuantities,
                         quantity,
-                        "manufactured-product"
+                        "manufactured-product",
+                        manufacturerId           // User ID of the processor
                 )
                 .thenAccept(txHash -> {
                     // Update batch with blockchain info
@@ -459,7 +460,7 @@ public class ManufacturerService {
 
         // Update the blockchain item status
         if (savedBatch.getBlockchainItemId() != null) {
-            blockchainService.updateItemStatus(savedBatch.getBlockchainItemId(), 3) // 3 = COMPLETED
+            blockchainService.updateItemStatus(savedBatch.getBlockchainItemId(), 3, batch.getManufacturer().getId()) // 3 = COMPLETED
                     .thenAccept(txHash -> {
                         // Update transaction hash
                         savedBatch.setBlockchainTxHash(txHash);
@@ -521,7 +522,7 @@ public class ManufacturerService {
 
         // Update the blockchain item status
         if (savedBatch.getBlockchainItemId() != null) {
-            blockchainService.updateItemStatus(savedBatch.getBlockchainItemId(), 4) // 4 = REJECTED
+            blockchainService.updateItemStatus(savedBatch.getBlockchainItemId(), 4, batch.getManufacturer().getId()) // 4 = REJECTED
                     .thenAccept(txHash -> {
                         // Update transaction hash
                         savedBatch.setBlockchainTxHash(txHash);

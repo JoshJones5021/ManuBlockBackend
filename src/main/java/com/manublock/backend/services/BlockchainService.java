@@ -90,14 +90,21 @@ public class BlockchainService {
         return executeWithRetry(contractFunction);
     }
 
-    synchronized public CompletableFuture<String> createSupplyChain(Long supplyChainId) {
-        System.out.println("📋 Starting createSupplyChain for ID: " + supplyChainId);
+    /**
+     * Creates a supply chain on blockchain with the admin's wallet
+     * Updated to include creator's user ID
+     */
+    synchronized public CompletableFuture<String> createSupplyChain(Long supplyChainId, Long creatorUserId) {
+        System.out.println("📋 Starting createSupplyChain for ID: " + supplyChainId + " by user: " + creatorUserId);
+
+        // Format parameters for the transaction record
+        String parameters = supplyChainId + "," + creatorUserId;
 
         Optional<BlockchainTransaction> existingTx = transactionRepository
                 .findByStatus("PENDING")
                 .stream()
                 .filter(tx -> tx.getFunction().equals("createSupplyChain") &&
-                        tx.getParameters().equals(supplyChainId.toString()))
+                        tx.getParameters().equals(parameters))
                 .findFirst();
 
         if (existingTx.isPresent()) {
@@ -153,14 +160,17 @@ public class BlockchainService {
         // Create a new transaction record
         BlockchainTransaction tx = new BlockchainTransaction();
         tx.setFunction("createSupplyChain");
-        tx.setParameters(supplyChainId.toString());
+        tx.setParameters(parameters); // Use the combined parameters string
         tx.setStatus("PENDING");
         tx.setCreatedAt(Instant.now());
         tx.setRetryCount(0);
         transactionRepository.save(tx);
         System.out.println("📝 Created new transaction record in DB");
 
-        RemoteFunctionCall<TransactionReceipt> functionCall = contract.createSupplyChain(BigInteger.valueOf(supplyChainId));
+        // Updated function call with both parameters
+        RemoteFunctionCall<TransactionReceipt> functionCall = contract.createSupplyChain(
+                BigInteger.valueOf(supplyChainId),
+                BigInteger.valueOf(creatorUserId));
 
         return sendTransactionWithRetry(functionCall, 0, tx)
                 .thenApply(txHash -> {
@@ -185,6 +195,15 @@ public class BlockchainService {
                     transactionRepository.save(tx);
                     throw new RuntimeException("Transaction failed: " + ex.getMessage(), ex);
                 });
+    }
+
+    /**
+     * Backward compatibility method that defaults to using the admin user ID
+     */
+    synchronized public CompletableFuture<String> createSupplyChain(Long supplyChainId) {
+        // Default to admin user ID (typically ID 1, but use whatever your admin's ID is)
+        Long adminUserId = 1L; // Replace with your admin's user ID
+        return createSupplyChain(supplyChainId, adminUserId);
     }
 
     public CompletableFuture<String> sendTransactionWithRetry(

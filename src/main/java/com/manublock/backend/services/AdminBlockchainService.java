@@ -60,32 +60,29 @@ public class AdminBlockchainService {
 
     /**
      * Authorizes a participant to interact with a supply chain using admin credentials
+     * Now uses user ID instead of wallet address
      */
     public CompletableFuture<String> authorizeParticipant(Long supplyChainId, Long participantUserId) {
-        // Find the user's wallet address
+        // Find the user to make sure they exist
         Users user = userRepository.findById(participantUserId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        String walletAddress = user.getWalletAddress();
-        if (walletAddress == null || walletAddress.isEmpty()) {
-            return CompletableFuture.failedFuture(
-                    new RuntimeException("User does not have a connected wallet address"));
-        }
+        // No longer need to check for wallet address
 
         // Create a transaction record
         BlockchainTransaction tx = new BlockchainTransaction();
         tx.setFunction("authorizeParticipant");
-        tx.setParameters(supplyChainId + "," + walletAddress);
+        tx.setParameters(supplyChainId + "," + participantUserId);
         tx.setStatus("PENDING");
         tx.setCreatedAt(Instant.now());
         tx.setRetryCount(0);
         transactionRepository.save(tx);
 
-        // Use the admin contract instance
+        // Use the admin contract instance with user ID (not wallet address)
         RemoteFunctionCall<TransactionReceipt> functionCall =
                 adminContract.authorizeParticipant(
                         BigInteger.valueOf(supplyChainId),
-                        walletAddress);
+                        BigInteger.valueOf(participantUserId)); // Changed from wallet address to user ID
 
         // Use the blockchain service's transaction handling mechanism
         return blockchainService.sendTransactionWithRetry(functionCall, tx);
@@ -93,70 +90,82 @@ public class AdminBlockchainService {
 
     /**
      * Creates a new supply chain item on the blockchain using admin credentials
+     * Now uses creator user ID instead of wallet address
      */
     public CompletableFuture<String> createItem(
             Long itemId,
             Long supplyChainId,
             Long quantity,
             String itemType,
-            Long ownerId) {
+            Long creatorId) {
 
-        // Find owner's wallet address for the transaction
-        Users owner = userRepository.findById(ownerId)
-                .orElseThrow(() -> new RuntimeException("Owner user not found"));
+        // Find owner to make sure they exist
+        Users creator = userRepository.findById(creatorId)
+                .orElseThrow(() -> new RuntimeException("Creator user not found"));
 
+        // Create a transaction record
         BlockchainTransaction tx = new BlockchainTransaction();
         tx.setFunction("createItem");
-        tx.setParameters(itemId + "," + supplyChainId + "," + quantity + "," + itemType);
+        tx.setParameters(itemId + "," + supplyChainId + "," + quantity + "," + itemType + "," + creatorId);
         tx.setStatus("PENDING");
         tx.setCreatedAt(Instant.now());
         tx.setRetryCount(0);
         transactionRepository.save(tx);
 
+        // Updated function call with creator user ID
         RemoteFunctionCall<TransactionReceipt> functionCall =
                 adminContract.createItem(
                         BigInteger.valueOf(itemId),
                         BigInteger.valueOf(supplyChainId),
                         BigInteger.valueOf(quantity),
-                        itemType);
+                        itemType,
+                        BigInteger.valueOf(creatorId)); // Added creator ID parameter
 
         return blockchainService.sendTransactionWithRetry(functionCall, tx);
     }
 
     /**
      * Transfers an item from one participant to another using admin credentials
+     * Now uses user IDs instead of wallet addresses
      */
     public CompletableFuture<String> transferItem(
             Long itemId,
-            String toAddress,
+            Long toUserId,         // Changed from String toAddress
             Long quantity,
             String actionType,
             Long fromUserId) {
 
-        // Find the from user's wallet address
+        // Verify both users exist
         Users fromUser = userRepository.findById(fromUserId)
                 .orElseThrow(() -> new RuntimeException("From user not found"));
 
+        Users toUser = userRepository.findById(toUserId)
+                .orElseThrow(() -> new RuntimeException("To user not found"));
+
+        // Create a transaction record
         BlockchainTransaction tx = new BlockchainTransaction();
         tx.setFunction("transferItem");
-        tx.setParameters(itemId + "," + toAddress + "," + quantity + "," + actionType);
+        tx.setParameters(itemId + "," + toUserId + "," + quantity + "," + actionType + "," + fromUserId);
         tx.setStatus("PENDING");
         tx.setCreatedAt(Instant.now());
         tx.setRetryCount(0);
         transactionRepository.save(tx);
 
+        // Updated function call with user IDs instead of wallet addresses
         RemoteFunctionCall<TransactionReceipt> functionCall =
                 adminContract.transferItem(
                         BigInteger.valueOf(itemId),
-                        toAddress,
+                        BigInteger.valueOf(toUserId),    // Changed to user ID
                         BigInteger.valueOf(quantity),
-                        actionType);
+                        actionType,
+                        BigInteger.valueOf(fromUserId)); // Added from user ID parameter
 
         return blockchainService.sendTransactionWithRetry(functionCall, tx);
     }
 
     /**
      * Process items to create a new item (manufacturing) using admin credentials
+     * Now includes processor user ID as a parameter
      */
     public CompletableFuture<String> processItem(
             List<Long> sourceItemIds,
@@ -164,11 +173,11 @@ public class AdminBlockchainService {
             List<Long> inputQuantities,
             Long outputQuantity,
             String newItemType,
-            Long manufacturerId) {
+            Long processorId) {      // Renamed from manufacturerId to processorId for clarity
 
-        // Find manufacturer's wallet address
-        Users manufacturer = userRepository.findById(manufacturerId)
-                .orElseThrow(() -> new RuntimeException("Manufacturer not found"));
+        // Verify processor exists
+        Users processor = userRepository.findById(processorId)
+                .orElseThrow(() -> new RuntimeException("Processor not found"));
 
         // Convert Lists of Long to Lists of BigInteger
         List<BigInteger> sourceItemIdsBigInt = new ArrayList<>();
@@ -182,46 +191,53 @@ public class AdminBlockchainService {
             inputQuantitiesBigInt.add(BigInteger.valueOf(qty));
         }
 
+        // Create a transaction record
         BlockchainTransaction tx = new BlockchainTransaction();
         tx.setFunction("processItem");
         tx.setParameters(sourceItemIds + "," + newItemId + ","
-                + inputQuantities + "," + outputQuantity + "," + newItemType);
+                + inputQuantities + "," + outputQuantity + "," + newItemType + "," + processorId);
         tx.setStatus("PENDING");
         tx.setCreatedAt(Instant.now());
         tx.setRetryCount(0);
         transactionRepository.save(tx);
 
+        // Updated function call with processor ID parameter
         RemoteFunctionCall<TransactionReceipt> functionCall =
                 adminContract.processItem(
                         sourceItemIdsBigInt,
                         BigInteger.valueOf(newItemId),
                         inputQuantitiesBigInt,
                         BigInteger.valueOf(outputQuantity),
-                        newItemType);
+                        newItemType,
+                        BigInteger.valueOf(processorId)); // Added processor ID parameter
 
         return blockchainService.sendTransactionWithRetry(functionCall, tx);
     }
 
     /**
      * Updates the status of an item on the blockchain using admin credentials
+     * Now includes owner user ID as a parameter
      */
     public CompletableFuture<String> updateItemStatus(Long itemId, Integer newStatus, Long ownerId) {
-        // Find the owner's wallet address
+        // Verify owner exists
         Users owner = userRepository.findById(ownerId)
                 .orElseThrow(() -> new RuntimeException("Owner not found"));
 
+        // Create a transaction record
         BlockchainTransaction tx = new BlockchainTransaction();
         tx.setFunction("updateItemStatus");
-        tx.setParameters(itemId + "," + newStatus);
+        tx.setParameters(itemId + "," + newStatus + "," + ownerId);
         tx.setStatus("PENDING");
         tx.setCreatedAt(Instant.now());
         tx.setRetryCount(0);
         transactionRepository.save(tx);
 
+        // Updated function call with owner ID parameter
         RemoteFunctionCall<TransactionReceipt> functionCall =
                 adminContract.updateItemStatus(
                         BigInteger.valueOf(itemId),
-                        BigInteger.valueOf(newStatus));
+                        BigInteger.valueOf(newStatus),
+                        BigInteger.valueOf(ownerId)); // Added owner ID parameter
 
         return blockchainService.sendTransactionWithRetry(functionCall, tx);
     }

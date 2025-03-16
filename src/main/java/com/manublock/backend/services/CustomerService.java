@@ -151,7 +151,7 @@ public class CustomerService {
 
             // Update blockchain status if item has a blockchain ID
             if (item.getBlockchainItemId() != null) {
-                blockchainService.updateItemStatus(item.getBlockchainItemId(), 3); // 3 = COMPLETED
+                blockchainService.updateItemStatus(item.getBlockchainItemId(), 3, order.getCustomer().getId()); // 3 = COMPLETED
             }
         }
 

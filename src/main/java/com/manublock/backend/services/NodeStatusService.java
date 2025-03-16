@@ -120,7 +120,8 @@ public class NodeStatusService {
     public void syncNodeWithBlockchainItem(Long nodeId, Long blockchainItemId) {
         try {
             SmartContract contract = blockchainService.getContract();
-            Tuple7<BigInteger, String, BigInteger, BigInteger, BigInteger, String, Boolean> itemDetails =
+            // Fixed Tuple7 type to match contract return types
+            Tuple7<BigInteger, BigInteger, BigInteger, BigInteger, BigInteger, String, Boolean> itemDetails =
                     contract.getItemDetails(BigInteger.valueOf(blockchainItemId)).send();
 
             int statusCode = itemDetails.component5().intValue();

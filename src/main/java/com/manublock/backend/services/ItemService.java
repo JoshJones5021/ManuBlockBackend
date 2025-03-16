@@ -92,12 +92,6 @@ public class ItemService {
             throw new RuntimeException("Insufficient quantity for transfer");
         }
 
-        // For blockchain transfer, we need the recipient's wallet address
-        String recipientWalletAddress = recipient.getWalletAddress();
-        if (recipientWalletAddress == null || recipientWalletAddress.isEmpty()) {
-            throw new RuntimeException("Recipient does not have a wallet address");
-        }
-
         // Update item status for UI feedback
         item.setStatus("IN_TRANSIT");
         item.setBlockchainStatus("PENDING");
@@ -105,8 +99,8 @@ public class ItemService {
 
         Items savedItem = itemRepository.save(item);
 
-        // Perform blockchain transfer using admin wallet
-        adminBlockchainService.transferItem(itemId, recipientWalletAddress, quantity, actionType, fromUserId)
+        // Perform blockchain transfer using admin wallet - passing toUserId directly instead of wallet address
+        adminBlockchainService.transferItem(itemId, toUserId, quantity, actionType, fromUserId)
                 .thenAccept(txHash -> {
                     // Update status after blockchain confirmation
                     if (quantity.equals(item.getQuantity())) {

@@ -39,30 +39,21 @@ public class ExtendedBlockchainService {
      * @return CompletableFuture containing the transaction hash
      */
     public CompletableFuture<String> authorizeParticipant(Long supplyChainId, Long participantUserId) {
-        // Find the user's wallet address
-        Users user = userRepository.findById(participantUserId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        String walletAddress = user.getWalletAddress();
-        if (walletAddress == null || walletAddress.isEmpty()) {
-            return CompletableFuture.failedFuture(
-                    new RuntimeException("User does not have a connected wallet address"));
-        }
-
         // Create a transaction record
         BlockchainTransaction tx = new BlockchainTransaction();
         tx.setFunction("authorizeParticipant");
-        tx.setParameters(supplyChainId + "," + walletAddress);
+        tx.setParameters(supplyChainId + "," + participantUserId);
         tx.setStatus("PENDING");
         tx.setCreatedAt(Instant.now());
         tx.setRetryCount(0);
         transactionRepository.save(tx);
 
         // Get the contract from the blockchain service
+        // Changed from walletAddress to participantUserId as BigInteger
         RemoteFunctionCall<TransactionReceipt> functionCall =
                 blockchainService.getContract().authorizeParticipant(
                         BigInteger.valueOf(supplyChainId),
-                        walletAddress);
+                        BigInteger.valueOf(participantUserId));
 
         // Use the existing sendTransactionWithRetry mechanism
         return blockchainService.sendTransactionWithRetry(functionCall, tx);
@@ -74,17 +65,19 @@ public class ExtendedBlockchainService {
      * @param supplyChainId The supply chain this item belongs to
      * @param quantity Initial quantity
      * @param itemType Type descriptor (raw material, product, etc.)
+     * @param creatorId The user ID of the creator
      * @return CompletableFuture containing the transaction hash
      */
     public CompletableFuture<String> createItem(
             Long itemId,
             Long supplyChainId,
             Long quantity,
-            String itemType) {
+            String itemType,
+            Long creatorId) {
 
         BlockchainTransaction tx = new BlockchainTransaction();
         tx.setFunction("createItem");
-        tx.setParameters(itemId + "," + supplyChainId + "," + quantity + "," + itemType);
+        tx.setParameters(itemId + "," + supplyChainId + "," + quantity + "," + itemType + "," + creatorId);
         tx.setStatus("PENDING");
         tx.setCreatedAt(Instant.now());
         tx.setRetryCount(0);
@@ -95,7 +88,8 @@ public class ExtendedBlockchainService {
                         BigInteger.valueOf(itemId),
                         BigInteger.valueOf(supplyChainId),
                         BigInteger.valueOf(quantity),
-                        itemType);
+                        itemType,
+                        BigInteger.valueOf(creatorId));
 
         return blockchainService.sendTransactionWithRetry(functionCall, tx);
     }
@@ -103,20 +97,22 @@ public class ExtendedBlockchainService {
     /**
      * Transfers an item from one participant to another
      * @param itemId ID of the item to transfer
-     * @param toAddress Recipient's wallet address
+     * @param toUserId Recipient's user ID (not wallet address)
      * @param quantity Amount to transfer
      * @param actionType Description of the transfer action
+     * @param fromUserId User ID of the current owner
      * @return CompletableFuture containing the transaction hash
      */
     public CompletableFuture<String> transferItem(
             Long itemId,
-            String toAddress,
+            Long toUserId,
             Long quantity,
-            String actionType) {
+            String actionType,
+            Long fromUserId) {
 
         BlockchainTransaction tx = new BlockchainTransaction();
         tx.setFunction("transferItem");
-        tx.setParameters(itemId + "," + toAddress + "," + quantity + "," + actionType);
+        tx.setParameters(itemId + "," + toUserId + "," + quantity + "," + actionType + "," + fromUserId);
         tx.setStatus("PENDING");
         tx.setCreatedAt(Instant.now());
         tx.setRetryCount(0);
@@ -125,9 +121,10 @@ public class ExtendedBlockchainService {
         RemoteFunctionCall<TransactionReceipt> functionCall =
                 blockchainService.getContract().transferItem(
                         BigInteger.valueOf(itemId),
-                        toAddress,
+                        BigInteger.valueOf(toUserId),
                         BigInteger.valueOf(quantity),
-                        actionType);
+                        actionType,
+                        BigInteger.valueOf(fromUserId));
 
         return blockchainService.sendTransactionWithRetry(functionCall, tx);
     }
@@ -139,6 +136,7 @@ public class ExtendedBlockchainService {
      * @param inputQuantities Quantities of each input item to use
      * @param outputQuantity Quantity of the output item
      * @param newItemType Type of the new item
+     * @param processorId User ID of the processor
      * @return CompletableFuture containing the transaction hash
      */
     public CompletableFuture<String> processItem(
@@ -146,7 +144,8 @@ public class ExtendedBlockchainService {
             Long newItemId,
             List<Long> inputQuantities,
             Long outputQuantity,
-            String newItemType) {
+            String newItemType,
+            Long processorId) {
 
         // Convert Lists of Long to Lists of BigInteger
         List<BigInteger> sourceItemIdsBigInt = new ArrayList<>();
@@ -163,7 +162,7 @@ public class ExtendedBlockchainService {
         BlockchainTransaction tx = new BlockchainTransaction();
         tx.setFunction("processItem");
         tx.setParameters(sourceItemIds + "," + newItemId + ","
-                + inputQuantities + "," + outputQuantity + "," + newItemType);
+                + inputQuantities + "," + outputQuantity + "," + newItemType + "," + processorId);
         tx.setStatus("PENDING");
         tx.setCreatedAt(Instant.now());
         tx.setRetryCount(0);
@@ -175,7 +174,8 @@ public class ExtendedBlockchainService {
                         BigInteger.valueOf(newItemId),
                         inputQuantitiesBigInt,
                         BigInteger.valueOf(outputQuantity),
-                        newItemType);
+                        newItemType,
+                        BigInteger.valueOf(processorId));
 
         return blockchainService.sendTransactionWithRetry(functionCall, tx);
     }
@@ -184,12 +184,13 @@ public class ExtendedBlockchainService {
      * Updates the status of an item on the blockchain
      * @param itemId ID of the item
      * @param newStatus New status value (0=CREATED, 1=IN_TRANSIT, 2=PROCESSING, 3=COMPLETED, 4=REJECTED)
+     * @param ownerId User ID of the owner
      * @return CompletableFuture containing the transaction hash
      */
-    public CompletableFuture<String> updateItemStatus(Long itemId, Integer newStatus) {
+    public CompletableFuture<String> updateItemStatus(Long itemId, Integer newStatus, Long ownerId) {
         BlockchainTransaction tx = new BlockchainTransaction();
         tx.setFunction("updateItemStatus");
-        tx.setParameters(itemId + "," + newStatus);
+        tx.setParameters(itemId + "," + newStatus + "," + ownerId);
         tx.setStatus("PENDING");
         tx.setCreatedAt(Instant.now());
         tx.setRetryCount(0);
@@ -198,7 +199,8 @@ public class ExtendedBlockchainService {
         RemoteFunctionCall<TransactionReceipt> functionCall =
                 blockchainService.getContract().updateItemStatus(
                         BigInteger.valueOf(itemId),
-                        BigInteger.valueOf(newStatus));
+                        BigInteger.valueOf(newStatus),
+                        BigInteger.valueOf(ownerId));
 
         return blockchainService.sendTransactionWithRetry(functionCall, tx);
     }

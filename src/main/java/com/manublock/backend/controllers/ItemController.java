@@ -28,8 +28,9 @@ public class ItemController {
             Long supplyChainId = ((Number) request.get("supplyChainId")).longValue();
             Long quantity = ((Number) request.get("quantity")).longValue();
             String itemType = (String) request.get("itemType");
+            Long creatorId = ((Number) request.get("creatorId")).longValue(); // Added creatorId
 
-            return blockchainService.createItem(itemId, supplyChainId, quantity, itemType)
+            return blockchainService.createItem(itemId, supplyChainId, quantity, itemType, creatorId)
                     .thenApply(txHash -> ResponseEntity.ok("Item created. Transaction hash: " + txHash))
                     .exceptionally(ex -> ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                             .body("Error creating item: " + ex.getMessage()));
@@ -45,11 +46,12 @@ public class ItemController {
     public CompletableFuture<ResponseEntity<String>> transferItem(@RequestBody Map<String, Object> request) {
         try {
             Long itemId = ((Number) request.get("itemId")).longValue();
-            String toAddress = (String) request.get("toAddress");
+            Long toUserId = ((Number) request.get("toUserId")).longValue(); // Changed from toAddress (String) to toUserId (Long)
             Long quantity = ((Number) request.get("quantity")).longValue();
             String actionType = (String) request.get("actionType");
+            Long fromUserId = ((Number) request.get("fromUserId")).longValue(); // Added fromUserId
 
-            return blockchainService.transferItem(itemId, toAddress, quantity, actionType)
+            return blockchainService.transferItem(itemId, toUserId, quantity, actionType, fromUserId)
                     .thenApply(txHash -> ResponseEntity.ok("Item transferred. Transaction hash: " + txHash))
                     .exceptionally(ex -> ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                             .body("Error transferring item: " + ex.getMessage()));
@@ -80,8 +82,9 @@ public class ItemController {
 
             Long outputQuantity = ((Number) request.get("outputQuantity")).longValue();
             String newItemType = (String) request.get("newItemType");
+            Long processorId = ((Number) request.get("processorId")).longValue(); // Added processorId
 
-            return blockchainService.processItem(sourceItemIds, newItemId, inputQuantities, outputQuantity, newItemType)
+            return blockchainService.processItem(sourceItemIds, newItemId, inputQuantities, outputQuantity, newItemType, processorId)
                     .thenApply(txHash -> ResponseEntity.ok("Items processed. Transaction hash: " + txHash))
                     .exceptionally(ex -> ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                             .body("Error processing items: " + ex.getMessage()));
@@ -98,8 +101,9 @@ public class ItemController {
         try {
             Long itemId = ((Number) request.get("itemId")).longValue();
             Integer newStatus = ((Number) request.get("newStatus")).intValue();
+            Long ownerId = ((Number) request.get("ownerId")).longValue(); // Added ownerId
 
-            return blockchainService.updateItemStatus(itemId, newStatus)
+            return blockchainService.updateItemStatus(itemId, newStatus, ownerId)
                     .thenApply(txHash -> ResponseEntity.ok("Item status updated. Transaction hash: " + txHash))
                     .exceptionally(ex -> ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                             .body("Error updating item status: " + ex.getMessage()));

@@ -151,19 +151,21 @@ public class DistributorService {
             materialRequest.getItems().forEach(item -> {
                 if (item.getBlockchainItemId() != null) {
                     try {
-                        // Get the destination wallet address, defaulting to a zero address if not present
-                        String destinationWallet = Optional.ofNullable(transport.getDistributor().getWalletAddress())
-                                .filter(addr -> !addr.isEmpty())
-                                .orElse("0x0000000000000000000000000000000000000001"); // Designated zero address
+                        // Get the distributor's user ID instead of wallet address
+                        Long distributorId = transport.getDistributor().getId();
+
+                        // Get the supplier's user ID
+                        Long supplierId = transport.getSource().getId();
 
                         // Make the action type more descriptive for tracking
-                        String actionType = "material-pickup:distributor:" + transport.getDistributor().getId();
+                        String actionType = "material-pickup:distributor:" + distributorId;
 
                         blockchainService.transferItem(
                                 item.getBlockchainItemId(),
-                                destinationWallet,
+                                distributorId,  // to user ID
                                 item.getAllocatedQuantity(),
-                                actionType
+                                actionType,
+                                supplierId      // from user ID
                         ).thenAccept(txHash -> {
                             // Store the transaction hash
                             transport.setBlockchainTxHash(txHash);
@@ -186,13 +188,21 @@ public class DistributorService {
             // Record blockchain transfer for each item
             order.getItems().forEach(item -> {
                 if (item.getBlockchainItemId() != null) {
-                    // Transfer ownership from manufacturer to distributor
-                    blockchainService.transferItem(
-                            item.getBlockchainItemId(),
-                            transport.getDistributor().getWalletAddress(),
-                            item.getQuantity(),
-                            "product-pickup"
-                    );
+                    try {
+                        // Get user IDs
+                        Long manufacturerId = item.getProduct().getManufacturer().getId();
+                        Long distributorId = transport.getDistributor().getId();
+
+                        blockchainService.transferItem(
+                                item.getBlockchainItemId(),
+                                distributorId,     // to user ID
+                                item.getQuantity(),
+                                "product-pickup",
+                                manufacturerId     // from user ID
+                        );
+                    } catch (Exception e) {
+                        System.err.println("Error preparing blockchain transfer: " + e.getMessage());
+                    }
                 }
             });
         }
@@ -228,18 +238,18 @@ public class DistributorService {
             materialRequest.getItems().forEach(item -> {
                 if (item.getBlockchainItemId() != null) {
                     try {
-                        // Get destination wallet with fallback to zero address
-                        String destinationWallet = Optional.ofNullable(transport.getDestination().getWalletAddress())
-                                .filter(addr -> !addr.isEmpty())
-                                .orElse("0x0000000000000000000000000000000000000001");
+                        // Get user IDs instead of wallet addresses
+                        Long distributorId = transport.getDistributor().getId();
+                        Long manufacturerId = transport.getDestination().getId();
 
-                        String actionType = "material-delivery:manufacturer:" + transport.getDestination().getId();
+                        String actionType = "material-delivery:manufacturer:" + manufacturerId;
 
                         blockchainService.transferItem(
                                 item.getBlockchainItemId(),
-                                destinationWallet,
+                                manufacturerId,   // to user ID
                                 item.getAllocatedQuantity(),
-                                actionType
+                                actionType,
+                                distributorId     // from user ID
                         ).thenAccept(txHash -> {
                             transport.setBlockchainTxHash(txHash);
                             transportRepository.save(transport);
@@ -262,18 +272,18 @@ public class DistributorService {
             order.getItems().forEach(item -> {
                 if (item.getBlockchainItemId() != null) {
                     try {
-                        // Get destination wallet with fallback to zero address
-                        String destinationWallet = Optional.ofNullable(transport.getDestination().getWalletAddress())
-                                .filter(addr -> !addr.isEmpty())
-                                .orElse("0x0000000000000000000000000000000000000001");
+                        // Get user IDs
+                        Long distributorId = transport.getDistributor().getId();
+                        Long customerId = transport.getDestination().getId();
 
-                        String actionType = "product-delivery:customer:" + transport.getDestination().getId();
+                        String actionType = "product-delivery:customer:" + customerId;
 
                         blockchainService.transferItem(
                                 item.getBlockchainItemId(),
-                                destinationWallet,
+                                customerId,        // to user ID
                                 item.getQuantity(),
-                                actionType
+                                actionType,
+                                distributorId      // from user ID
                         ).thenAccept(txHash -> {
                             transport.setBlockchainTxHash(txHash);
                             transportRepository.save(transport);

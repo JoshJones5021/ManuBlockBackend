@@ -16,8 +16,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 @RestController
 @RequestMapping("/api/tracing")
@@ -58,12 +56,13 @@ public class ItemTracingController {
     public ResponseEntity<?> getBlockchainItemDetails(@PathVariable Long itemId) {
         try {
             SmartContract contract = blockchainService.getContract();
-            Tuple7<BigInteger, String, BigInteger, BigInteger, BigInteger, String, Boolean> itemDetails =
+            // Update the Tuple type to match the new return type from the contract
+            Tuple7<BigInteger, BigInteger, BigInteger, BigInteger, BigInteger, String, Boolean> itemDetails =
                     contract.getItemDetails(BigInteger.valueOf(itemId)).send();
 
             Map<String, Object> response = new HashMap<>();
             response.put("id", itemDetails.component1().longValue());
-            response.put("owner", itemDetails.component2());
+            response.put("ownerId", itemDetails.component2().longValue()); // Changed from "owner" (String) to "ownerId" (Long)
             response.put("quantity", itemDetails.component3().longValue());
             response.put("supplyChainId", itemDetails.component4().longValue());
             response.put("status", itemDetails.component5().intValue());
@@ -117,14 +116,15 @@ public class ItemTracingController {
     public ResponseEntity<?> getBlockchainTransactionDetails(@PathVariable Long transactionId) {
         try {
             SmartContract contract = blockchainService.getContract();
-            Tuple8<BigInteger, BigInteger, String, String, BigInteger, BigInteger, BigInteger, String> txDetails =
+            // Update Tuple type to match the new contract return type
+            Tuple8<BigInteger, BigInteger, BigInteger, BigInteger, BigInteger, BigInteger, BigInteger, String> txDetails =
                     contract.getTransactionDetails(BigInteger.valueOf(transactionId)).send();
 
             Map<String, Object> response = new HashMap<>();
             response.put("id", txDetails.component1().longValue());
             response.put("itemId", txDetails.component2().longValue());
-            response.put("from", txDetails.component3());
-            response.put("to", txDetails.component4());
+            response.put("fromUserId", txDetails.component3().longValue()); // Changed from "from" (String) to "fromUserId" (Long)
+            response.put("toUserId", txDetails.component4().longValue());   // Changed from "to" (String) to "toUserId" (Long)
             response.put("supplyChainId", txDetails.component5().longValue());
             response.put("quantityTransferred", txDetails.component6().longValue());
             response.put("timestamp", txDetails.component7().longValue());
@@ -144,7 +144,8 @@ public class ItemTracingController {
 
             // Get blockchain item details
             SmartContract contract = blockchainService.getContract();
-            Tuple7<BigInteger, String, BigInteger, BigInteger, BigInteger, String, Boolean> itemDetails = null;
+            // Update Tuple type
+            Tuple7<BigInteger, BigInteger, BigInteger, BigInteger, BigInteger, String, Boolean> itemDetails = null;
 
             // Implement retry logic inline for now
             int maxRetries = 5;
@@ -174,7 +175,7 @@ public class ItemTracingController {
 
             Map<String, Object> currentItem = new HashMap<>();
             currentItem.put("id", itemDetails.component1().longValue());
-            currentItem.put("owner", itemDetails.component2());
+            currentItem.put("ownerId", itemDetails.component2().longValue()); // Changed to ownerId
             currentItem.put("quantity", itemDetails.component3().longValue());
             currentItem.put("supplyChainId", itemDetails.component4().longValue());
             currentItem.put("status", itemDetails.component5().intValue());
@@ -209,7 +210,8 @@ public class ItemTracingController {
             List<Map<String, Object>> parentItems = new ArrayList<>();
 
             for (BigInteger parentId : parentIds) {
-                Tuple7<BigInteger, String, BigInteger, BigInteger, BigInteger, String, Boolean> parentDetails = null;
+                // Update Tuple type
+                Tuple7<BigInteger, BigInteger, BigInteger, BigInteger, BigInteger, String, Boolean> parentDetails = null;
                 retryCount = 0;
                 waitTime = 1000;
 
@@ -232,7 +234,7 @@ public class ItemTracingController {
 
                 Map<String, Object> parentItem = new HashMap<>();
                 parentItem.put("id", parentDetails.component1().longValue());
-                parentItem.put("owner", parentDetails.component2());
+                parentItem.put("ownerId", parentDetails.component2().longValue()); // Changed to ownerId
                 parentItem.put("quantity", parentDetails.component3().longValue());
                 parentItem.put("supplyChainId", parentDetails.component4().longValue());
                 parentItem.put("status", parentDetails.component5().intValue());
@@ -270,7 +272,8 @@ public class ItemTracingController {
             List<Map<String, Object>> childItems = new ArrayList<>();
 
             for (BigInteger childId : childIds) {
-                Tuple7<BigInteger, String, BigInteger, BigInteger, BigInteger, String, Boolean> childDetails = null;
+                // Update Tuple type
+                Tuple7<BigInteger, BigInteger, BigInteger, BigInteger, BigInteger, String, Boolean> childDetails = null;
                 retryCount = 0;
                 waitTime = 1000;
 
@@ -293,7 +296,7 @@ public class ItemTracingController {
 
                 Map<String, Object> childItem = new HashMap<>();
                 childItem.put("id", childDetails.component1().longValue());
-                childItem.put("owner", childDetails.component2());
+                childItem.put("ownerId", childDetails.component2().longValue()); // Changed to ownerId
                 childItem.put("quantity", childDetails.component3().longValue());
                 childItem.put("supplyChainId", childDetails.component4().longValue());
                 childItem.put("status", childDetails.component5().intValue());

@@ -65,42 +65,64 @@ public class NodeService {
         Nodes existingNode = nodeRepository.findById(nodeId)
                 .orElseThrow(() -> new RuntimeException("Node not found"));
 
-        // Update basic properties
-        if (updatedNode.getName() != null) {
-            existingNode.setName(updatedNode.getName());
-        }
+        // If only x and y coordinates are provided, just update those without touching other fields
+        boolean hasOnlyCoordinates = isCoordinatesOnlyUpdate(updatedNode);
 
-        if (updatedNode.getRole() != null) {
-            existingNode.setRole(updatedNode.getRole());
-        }
-
-        // Don't allow direct status updates from admin UI
-        // Status should only be changed by the NodeStatusService based on blockchain events
-        // or through specific system operations
-
-        if (updatedNode.getX() != 0) {
+        if (hasOnlyCoordinates) {
+            // Only update the coordinates
             existingNode.setX(updatedNode.getX());
-        }
-
-        if (updatedNode.getY() != 0) {
             existingNode.setY(updatedNode.getY());
-        }
+        } else {
+            // Full update - handle all fields
 
-        // Handle user assignment
-        if (updatedNode.getAssignedUser() != null && updatedNode.getAssignedUser().getId() != null) {
-            Users user = userRepository.findById(updatedNode.getAssignedUser().getId())
-                    .orElseThrow(() -> new RuntimeException("User not found"));
-            existingNode.setAssignedUser(user);
-        } else if (updatedNode.getAssignedUserId() != null) {
-            Users user = userRepository.findById(updatedNode.getAssignedUserId())
-                    .orElseThrow(() -> new RuntimeException("User not found"));
-            existingNode.setAssignedUser(user);
-        } else if (updatedNode.getAssignedUserId() == null) {
-            // Explicit null assignment means remove the user
-            existingNode.setAssignedUser(null);
+            // Update name if provided
+            if (updatedNode.getName() != null) {
+                existingNode.setName(updatedNode.getName());
+            }
+
+            // Update role if provided
+            if (updatedNode.getRole() != null) {
+                existingNode.setRole(updatedNode.getRole());
+            }
+
+            // Don't allow direct status updates from admin UI
+            // Status should only be changed by the NodeStatusService based on blockchain events
+            // or through specific system operations
+
+            // Update coordinates
+            existingNode.setX(updatedNode.getX());
+            existingNode.setY(updatedNode.getY());
+
+            // Handle user assignment
+            if (updatedNode.getAssignedUser() != null && updatedNode.getAssignedUser().getId() != null) {
+                Users user = userRepository.findById(updatedNode.getAssignedUser().getId())
+                        .orElseThrow(() -> new RuntimeException("User not found"));
+                existingNode.setAssignedUser(user);
+            } else if (updatedNode.getAssignedUserId() != null) {
+                Users user = userRepository.findById(updatedNode.getAssignedUserId())
+                        .orElseThrow(() -> new RuntimeException("User not found"));
+                existingNode.setAssignedUser(user);
+            } else {
+                // Explicit null assignment means remove the user
+                existingNode.setAssignedUser(null);
+            }
         }
 
         return nodeRepository.save(existingNode);
+    }
+
+    /**
+     * Helper method to determine if the update only contains coordinate changes
+     */
+    private boolean isCoordinatesOnlyUpdate(Nodes updatedNode) {
+        // Check if only x and y are provided (not null or 0)
+        // and other fields are default values
+        boolean hasCoordinates = updatedNode.getX() != 0 || updatedNode.getY() != 0;
+        boolean hasDefaultName = updatedNode.getName() == null || updatedNode.getName().equals("Unnamed Node");
+        boolean hasDefaultRole = updatedNode.getRole() == null || updatedNode.getRole().equals("Unassigned");
+        boolean hasNoAssignedUser = updatedNode.getAssignedUser() == null && updatedNode.getAssignedUserId() == null;
+
+        return hasCoordinates && hasDefaultName && hasDefaultRole && hasNoAssignedUser;
     }
 
     @Transactional
