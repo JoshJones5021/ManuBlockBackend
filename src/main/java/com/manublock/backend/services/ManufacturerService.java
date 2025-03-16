@@ -641,4 +641,29 @@ public class ManufacturerService {
             this.quantity = quantity;
         }
     }
+
+    /**
+     * Start production for an order
+     */
+    public Order startOrderProduction(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        // Verify order is in the correct state
+        if (!"Requested".equals(order.getStatus())) {
+            throw new RuntimeException("Order is not in Requested status");
+        }
+
+        // Update order status
+        order.setStatus("In Production");
+        order.setUpdatedAt(new Date());
+
+        // Update all order items to "In Production" status
+        for (OrderItem item : order.getItems()) {
+            item.setStatus("In Production");
+            orderItemRepository.save(item);
+        }
+
+        return orderRepository.save(order);
+    }
 }

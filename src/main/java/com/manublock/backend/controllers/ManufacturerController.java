@@ -2,11 +2,10 @@ package com.manublock.backend.controllers;
 
 import com.manublock.backend.dto.MaterialRequestCreateDTO;
 import com.manublock.backend.dto.MaterialRequestDTO;
-import com.manublock.backend.models.Material;
-import com.manublock.backend.models.MaterialRequest;
-import com.manublock.backend.models.Product;
-import com.manublock.backend.models.ProductionBatch;
+import com.manublock.backend.dto.OrderResponseDTO;
+import com.manublock.backend.models.*;
 import com.manublock.backend.services.ManufacturerService;
+import com.manublock.backend.utils.DTOConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +28,9 @@ public class ManufacturerController {
     public ManufacturerController(ManufacturerService manufacturerService) {
         this.manufacturerService = manufacturerService;
     }
+
+    @Autowired
+    private CustomerController customerController;
 
     @PostMapping("/products")
     public ResponseEntity<?> createProduct(@RequestBody Map<String, Object> payload) {
@@ -229,10 +231,30 @@ public class ManufacturerController {
     @GetMapping("/orders/{manufacturerId}")
     public ResponseEntity<?> getOrdersByManufacturer(@PathVariable Long manufacturerId) {
         try {
-            return ResponseEntity.ok(manufacturerService.getOrdersByManufacturer(manufacturerId));
+            List<Order> orders = manufacturerService.getOrdersByManufacturer(manufacturerId);
+
+            // Convert to DTOs to prevent circular references
+            List<OrderResponseDTO> orderDTOs = orders.stream()
+                    .map(DTOConverter::convertToOrderDTO)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(orderDTOs);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving orders: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/orders/{orderId}/start-production")
+    public ResponseEntity<?> startOrderProduction(@PathVariable Long orderId) {
+        try {
+            Order order = manufacturerService.startOrderProduction(orderId);
+            // Convert to DTO to prevent circular references
+            OrderResponseDTO orderDTO = DTOConverter.convertToOrderDTO(order);
+            return ResponseEntity.ok(orderDTO);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error starting production: " + e.getMessage());
         }
     }
 }
