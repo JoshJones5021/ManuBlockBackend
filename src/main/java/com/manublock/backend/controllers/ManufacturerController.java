@@ -111,6 +111,7 @@ public class ManufacturerController {
         }
     }
 
+    // Add this to the beginning of the createProductionBatch method in ManufacturerController.java
     @PostMapping("/production/batch")
     public ResponseEntity<?> createProductionBatch(@RequestBody Map<String, Object> payload) {
         try {
@@ -121,15 +122,42 @@ public class ManufacturerController {
                     Long.valueOf(payload.get("orderId").toString()) : null;
             Long quantity = Long.valueOf(payload.get("quantity").toString());
 
-            @SuppressWarnings("unchecked")
-            List<ManufacturerService.MaterialBatchItem> materials =
-                    (List<ManufacturerService.MaterialBatchItem>) payload.get("materials");
+            // Handle the materials array properly
+            List<ManufacturerService.MaterialBatchItem> materials = new ArrayList<>();
+
+            if (payload.get("materials") instanceof List) {
+                List<?> materialsList = (List<?>) payload.get("materials");
+
+                for (Object rawItem : materialsList) {
+                    if (rawItem instanceof Map) {
+                        Map<?, ?> itemMap = (Map<?, ?>) rawItem;
+
+                        // Create a new MaterialBatchItem for each entry
+                        ManufacturerService.MaterialBatchItem item = new ManufacturerService.MaterialBatchItem();
+
+                        if (itemMap.get("materialId") != null) {
+                            item.setMaterialId(Long.valueOf(itemMap.get("materialId").toString()));
+                        }
+
+                        if (itemMap.get("blockchainItemId") != null) {
+                            item.setBlockchainItemId(Long.valueOf(itemMap.get("blockchainItemId").toString()));
+                        }
+
+                        if (itemMap.get("quantity") != null) {
+                            item.setQuantity(Long.valueOf(itemMap.get("quantity").toString()));
+                        }
+
+                        materials.add(item);
+                    }
+                }
+            }
 
             ProductionBatch batch = manufacturerService.createProductionBatch(
                     manufacturerId, productId, supplyChainId, orderId, quantity, materials);
 
             return ResponseEntity.ok(batch);
         } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error creating production batch: " + e.getMessage());
         }

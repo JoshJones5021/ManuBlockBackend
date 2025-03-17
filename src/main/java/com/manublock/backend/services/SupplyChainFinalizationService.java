@@ -77,20 +77,19 @@ public class SupplyChainFinalizationService {
         chain.setBlockchainStatus("FINALIZED");
 
         // 5. Register all users on the blockchain using admin wallet
+        // 5. Register all users on the blockchain using admin wallet
         nodes.stream()
                 .filter(node -> node.getAssignedUser() != null)
                 .map(node -> node.getAssignedUser())
                 .distinct() // Remove duplicates
                 .forEach(user -> {
-                    if (user.getWalletAddress() != null && !user.getWalletAddress().isEmpty()) {
-                        try {
-                            // Authorize user in blockchain using admin wallet
-                            adminBlockchainService.authorizeParticipant(supplyChainId, user.getId());
-                        } catch (Exception e) {
-                            // Log error but continue with other users
-                            System.err.println("Failed to authorize user " + user.getUsername() +
-                                    " on blockchain: " + e.getMessage());
-                        }
+                    try {
+                        // Authorize user in blockchain using admin wallet
+                        adminBlockchainService.authorizeParticipant(supplyChainId, user.getId());
+                    } catch (Exception e) {
+                        // Log error but continue with other users
+                        System.err.println("Failed to authorize user " + user.getUsername() +
+                                " on blockchain: " + e.getMessage());
                     }
                 });
 
