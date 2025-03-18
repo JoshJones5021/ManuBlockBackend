@@ -34,6 +34,9 @@ public class SupplierService {
     @Autowired
     private ExtendedBlockchainService blockchainService;
 
+    @Autowired
+    private ItemRepository itemRepository;
+
     /**
      * Create a new material in both database and blockchain
      */
@@ -202,7 +205,25 @@ public class SupplierService {
                     approvedQuantity,
                     "allocated-material",
                     request.getSupplier().getId()  // User ID of the processor (supplier)
-            );
+            ).thenAccept(txHash -> {
+                // Create a corresponding record in the Items table
+                Items allocatedItem = new Items();
+                allocatedItem.setId(blockchainItemId);
+                allocatedItem.setName(material.getName());
+                allocatedItem.setItemType("allocated-material");
+                allocatedItem.setQuantity(approvedQuantity);
+                allocatedItem.setOwner(request.getManufacturer()); // Set manufacturer as owner
+                allocatedItem.setSupplyChain(request.getSupplyChain());
+                allocatedItem.setStatus("CREATED");
+                allocatedItem.setParentItemIds(List.of(material.getBlockchainItemId()));
+                allocatedItem.setBlockchainTxHash(txHash);
+                allocatedItem.setBlockchainStatus("CONFIRMED");
+                allocatedItem.setCreatedAt(new Date());
+                allocatedItem.setUpdatedAt(new Date());
+
+                // Save to items table using repository
+                itemRepository.save(allocatedItem);
+            });
         }
 
         // Update request status

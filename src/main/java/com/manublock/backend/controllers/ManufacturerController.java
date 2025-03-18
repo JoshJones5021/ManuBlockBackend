@@ -1,8 +1,6 @@
 package com.manublock.backend.controllers;
 
-import com.manublock.backend.dto.MaterialRequestCreateDTO;
-import com.manublock.backend.dto.MaterialRequestDTO;
-import com.manublock.backend.dto.OrderResponseDTO;
+import com.manublock.backend.dto.*;
 import com.manublock.backend.models.*;
 import com.manublock.backend.services.ManufacturerService;
 import com.manublock.backend.utils.DTOConverter;
@@ -43,12 +41,23 @@ public class ManufacturerController {
             Long manufacturerId = Long.valueOf(payload.get("manufacturerId").toString());
             Long supplyChainId = Long.valueOf(payload.get("supplyChainId").toString());
 
-            @SuppressWarnings("unchecked")
-            List<Long> requiredMaterialIds = (List<Long>) payload.get("requiredMaterialIds");
+            // Extract materials with quantities
+            List<MaterialQuantityDTO> materialQuantities = new ArrayList<>();
+            if (payload.containsKey("requiredMaterials")) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> materialsList = (List<Map<String, Object>>) payload.get("requiredMaterials");
+
+                for (Map<String, Object> materialData : materialsList) {
+                    MaterialQuantityDTO dto = new MaterialQuantityDTO();
+                    dto.setMaterialId(Long.valueOf(materialData.get("materialId").toString()));
+                    dto.setQuantity(Long.valueOf(materialData.get("quantity").toString()));
+                    materialQuantities.add(dto);
+                }
+            }
 
             Product product = manufacturerService.createProduct(
                     name, description, specifications, sku, price,
-                    manufacturerId, supplyChainId, requiredMaterialIds);
+                    manufacturerId, supplyChainId, materialQuantities);
 
             return ResponseEntity.ok(product);
         } catch (Exception e) {
@@ -68,11 +77,22 @@ public class ManufacturerController {
             String sku = (String) payload.get("sku");
             BigDecimal price = new BigDecimal(payload.get("price").toString());
 
-            @SuppressWarnings("unchecked")
-            List<Long> requiredMaterialIds = (List<Long>) payload.get("requiredMaterialIds");
+            // Extract materials with quantities
+            List<MaterialQuantityDTO> materialQuantities = new ArrayList<>();
+            if (payload.containsKey("requiredMaterials")) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> materialsList = (List<Map<String, Object>>) payload.get("requiredMaterials");
+
+                for (Map<String, Object> materialData : materialsList) {
+                    MaterialQuantityDTO dto = new MaterialQuantityDTO();
+                    dto.setMaterialId(Long.valueOf(materialData.get("materialId").toString()));
+                    dto.setQuantity(Long.valueOf(materialData.get("quantity").toString()));
+                    materialQuantities.add(dto);
+                }
+            }
 
             Product product = manufacturerService.updateProduct(
-                    productId, name, description, specifications, sku, price, requiredMaterialIds);
+                    productId, name, description, specifications, sku, price, materialQuantities);
 
             return ResponseEntity.ok(product);
         } catch (Exception e) {
@@ -152,10 +172,13 @@ public class ManufacturerController {
                 }
             }
 
+            // Call the service to create the production batch
             ProductionBatch batch = manufacturerService.createProductionBatch(
                     manufacturerId, productId, supplyChainId, orderId, quantity, materials);
 
-            return ResponseEntity.ok(batch);
+            // Convert to DTO before returning
+            ProductionBatchDTO batchDTO = new ProductionBatchDTO(batch);
+            return ResponseEntity.ok(batchDTO);
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -194,14 +217,12 @@ public class ManufacturerController {
     }
 
     @GetMapping("/products/{manufacturerId}")
-    public ResponseEntity<?> getProductsByManufacturer(@PathVariable Long manufacturerId) {
-        try {
-            List<Product> products = manufacturerService.getProductsByManufacturer(manufacturerId);
-            return ResponseEntity.ok(products);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error retrieving products: " + e.getMessage());
-        }
+    public ResponseEntity<List<ProductDTO>> getProductsByManufacturer(@PathVariable Long manufacturerId) {
+        List<Product> products = manufacturerService.getProductsByManufacturer(manufacturerId);
+        List<ProductDTO> productDTOs = products.stream()
+                .map(ProductDTO::fromEntity)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(productDTOs);
     }
 
     // In MaterialController or ManufacturerController
@@ -249,7 +270,13 @@ public class ManufacturerController {
     public ResponseEntity<?> getBatchesByManufacturer(@PathVariable Long manufacturerId) {
         try {
             List<ProductionBatch> batches = manufacturerService.getBatchesByManufacturer(manufacturerId);
-            return ResponseEntity.ok(batches);
+
+            // Convert to DTOs to prevent recursion
+            List<ProductionBatchDTO> batchDTOs = batches.stream()
+                    .map(ProductionBatchDTO::new)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(batchDTOs);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving production batches: " + e.getMessage());
@@ -283,6 +310,17 @@ public class ManufacturerController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error starting production: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/materials/available-blockchain/{manufacturerId}")
+    public ResponseEntity<?> getAvailableMaterialsWithBlockchainIds(@PathVariable Long manufacturerId) {
+        try {
+            List<MaterialDTO> materials = manufacturerService.getAvailableMaterialsWithBlockchainIds(manufacturerId);
+            return ResponseEntity.ok(materials);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error retrieving available materials: " + e.getMessage());
         }
     }
 }

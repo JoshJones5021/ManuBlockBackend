@@ -1,6 +1,7 @@
 package com.manublock.backend.controllers;
 
 import com.manublock.backend.dto.OrderResponseDTO;
+import com.manublock.backend.dto.ProductDTO;
 import com.manublock.backend.models.Order;
 import com.manublock.backend.models.Product;
 import com.manublock.backend.services.CustomerService;
@@ -146,8 +147,13 @@ public class CustomerController {
     public ResponseEntity<?> getAvailableProducts() {
         try {
             List<Product> products = customerService.getAvailableProducts();
-            // You might want to convert products to DTOs as well if they have circular references
-            return ResponseEntity.ok(products);
+
+            // Convert the Product entities to ProductDTO objects to avoid recursion
+            List<ProductDTO> productDTOs = products.stream()
+                    .map(ProductDTO::fromEntity)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(productDTOs);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving available products: " + e.getMessage());

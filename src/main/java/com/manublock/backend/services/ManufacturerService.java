@@ -1,5 +1,7 @@
 package com.manublock.backend.services;
 
+import com.manublock.backend.dto.MaterialDTO;
+import com.manublock.backend.dto.MaterialQuantityDTO;
 import com.manublock.backend.dto.MaterialRequestItemCreateDTO;
 import com.manublock.backend.models.*;
 import com.manublock.backend.repositories.*;
@@ -47,12 +49,21 @@ public class ManufacturerService {
     @Autowired
     private ExtendedBlockchainService blockchainService;
 
+    @Autowired
+    private ProductMaterialQuantityRepository productMaterialQuantityRepository;
+
+    @Autowired
+    private ItemRepository itemRepository;
+
     /**
      * Create a new product
      */
+    /**
+     * Create a new product with material quantities
+     */
     public Product createProduct(String name, String description, String specifications,
                                  String sku, BigDecimal price, Long manufacturerId,
-                                 Long supplyChainId, List<Long> requiredMaterialIds) {
+                                 Long supplyChainId, List<MaterialQuantityDTO> materialQuantities) {
 
         Users manufacturer = userRepository.findById(manufacturerId)
                 .orElseThrow(() -> new RuntimeException("Manufacturer not found"));
@@ -64,16 +75,6 @@ public class ManufacturerService {
         Chains supplyChain = chainRepository.findById(supplyChainId)
                 .orElseThrow(() -> new RuntimeException("Supply chain not found"));
 
-        // Get required materials
-        List<Material> requiredMaterials = new ArrayList<>();
-        if (requiredMaterialIds != null && !requiredMaterialIds.isEmpty()) {
-            requiredMaterials = materialRepository.findAllById(requiredMaterialIds);
-
-            if (requiredMaterials.size() != requiredMaterialIds.size()) {
-                throw new RuntimeException("Some required materials not found");
-            }
-        }
-
         // Create product in database
         Product product = new Product();
         product.setName(name);
@@ -84,11 +85,28 @@ public class ManufacturerService {
         product.setAvailableQuantity(0L); // Initially 0
         product.setManufacturer(manufacturer);
         product.setActive(true);
-        product.setRequiredMaterials(requiredMaterials);
         product.setCreatedAt(new Date());
         product.setUpdatedAt(new Date());
 
-        return productRepository.save(product);
+        // Save the product first to get an ID
+        Product savedProduct = productRepository.save(product);
+
+        // Now add material quantities
+        if (materialQuantities != null && !materialQuantities.isEmpty()) {
+            for (MaterialQuantityDTO mqDTO : materialQuantities) {
+                Material material = materialRepository.findById(mqDTO.getMaterialId())
+                        .orElseThrow(() -> new RuntimeException("Material not found: " + mqDTO.getMaterialId()));
+
+                ProductMaterialQuantity pmq = new ProductMaterialQuantity();
+                pmq.setProduct(savedProduct);
+                pmq.setMaterial(material);
+                pmq.setQuantity(mqDTO.getQuantity());
+                productMaterialQuantityRepository.save(pmq);
+            }
+        }
+
+        // Reload the product to include the newly saved relationships
+        return productRepository.findById(savedProduct.getId()).orElse(savedProduct);
     }
 
     /**
@@ -96,21 +114,10 @@ public class ManufacturerService {
      */
     public Product updateProduct(Long productId, String name, String description,
                                  String specifications, String sku, BigDecimal price,
-                                 List<Long> requiredMaterialIds) {
+                                 List<MaterialQuantityDTO> materialQuantities) {
 
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
-
-        // Get required materials if provided
-        if (requiredMaterialIds != null && !requiredMaterialIds.isEmpty()) {
-            List<Material> requiredMaterials = materialRepository.findAllById(requiredMaterialIds);
-
-            if (requiredMaterials.size() != requiredMaterialIds.size()) {
-                throw new RuntimeException("Some required materials not found");
-            }
-
-            product.setRequiredMaterials(requiredMaterials);
-        }
 
         // Update properties
         product.setName(name);
@@ -120,7 +127,30 @@ public class ManufacturerService {
         product.setPrice(price);
         product.setUpdatedAt(new Date());
 
-        return productRepository.save(product);
+        // Save the product updates
+        Product savedProduct = productRepository.save(product);
+
+        // Delete existing material quantities
+        List<ProductMaterialQuantity> existingQuantities =
+                productMaterialQuantityRepository.findByProductId(productId);
+        productMaterialQuantityRepository.deleteAll(existingQuantities);
+
+        // Add new material quantities
+        if (materialQuantities != null && !materialQuantities.isEmpty()) {
+            for (MaterialQuantityDTO mqDTO : materialQuantities) {
+                Material material = materialRepository.findById(mqDTO.getMaterialId())
+                        .orElseThrow(() -> new RuntimeException("Material not found: " + mqDTO.getMaterialId()));
+
+                ProductMaterialQuantity pmq = new ProductMaterialQuantity();
+                pmq.setProduct(savedProduct);
+                pmq.setMaterial(material);
+                pmq.setQuantity(mqDTO.getQuantity());
+                productMaterialQuantityRepository.save(pmq);
+            }
+        }
+
+        // Reload the product to include the updated relationships
+        return productRepository.findById(savedProduct.getId()).orElse(savedProduct);
     }
 
     public List<Material> getAvailableMaterialsForManufacturer(Long manufacturerId) {
@@ -140,6 +170,52 @@ public class ManufacturerService {
         return materialRepository.findAllById(materialIds);
     }
 
+    /**
+     * Get all materials that have been allocated to this manufacturer via blockchain
+     * and are available to use in production
+     */
+    public List<MaterialDTO> getAvailableMaterialsWithBlockchainIds(Long manufacturerId) {
+        try {
+            // Find the manufacturer
+            Users manufacturer = userRepository.findById(manufacturerId)
+                    .orElseThrow(() -> new RuntimeException("Manufacturer not found"));
+
+            // Query ONLY items of type "allocated-material" owned by this manufacturer
+            List<Items> allocatedItems = itemRepository.findByOwner_IdAndItemType(
+                    manufacturerId, "allocated-material");
+
+            List<MaterialDTO> availableMaterials = new ArrayList<>();
+
+            for (Items item : allocatedItems) {
+                // Get the parent material ID from parentItemIds
+                List<Long> parentIds = item.getParentItemIds();
+
+                if (parentIds != null && !parentIds.isEmpty()) {
+                    // Find the original material based on blockchain item ID
+                    Optional<Material> originalMaterial = materialRepository.findByBlockchainItemId(parentIds.get(0));
+
+                    if (originalMaterial.isPresent()) {
+                        Material material = originalMaterial.get();
+
+                        MaterialDTO materialDTO = new MaterialDTO();
+                        materialDTO.setId(material.getId());
+                        materialDTO.setName(item.getName());
+                        materialDTO.setDescription(material.getDescription());
+                        materialDTO.setUnit(material.getUnit());
+                        materialDTO.setQuantity(item.getQuantity());
+                        materialDTO.setBlockchainItemId(item.getId());
+                        materialDTO.setItemType(item.getItemType()); // Set the item type
+
+                        availableMaterials.add(materialDTO);
+                    }
+                }
+            }
+
+            return availableMaterials;
+        } catch (Exception e) {
+            throw new RuntimeException("Error fetching allocated materials: " + e.getMessage(), e);
+        }
+    }
     /**
      * Deactivate a product (logical deletion)
      */
@@ -348,12 +424,21 @@ public class ManufacturerService {
 
         // Validate material items
         for (MaterialBatchItem item : materials) {
-            Material material = materialRepository.findById(item.getMaterialId())
-                    .orElseThrow(() -> new RuntimeException("Material not found: " + item.getMaterialId()));
+            // This is critical - verify ownership in the blockchain before proceeding
+            Items blockchainItem = itemRepository.findById(item.getBlockchainItemId())
+                    .orElseThrow(() -> new RuntimeException("Blockchain item not found: " + item.getBlockchainItemId()));
 
-            // Check if material has blockchain ID (has been allocated)
-            if (item.getBlockchainItemId() == null) {
-                throw new RuntimeException("Material has not been allocated on blockchain: " + material.getName());
+            // Check if the item belongs to this manufacturer
+            if (!blockchainItem.getOwner().getId().equals(manufacturerId)) {
+                throw new RuntimeException("Material with blockchain ID " + item.getBlockchainItemId() +
+                        " is not owned by manufacturer " + manufacturerId +
+                        ". Actual owner: " + blockchainItem.getOwner().getId());
+            }
+
+            // Check if the item is of the right type
+            if (!"allocated-material".equals(blockchainItem.getItemType())) {
+                throw new RuntimeException("Material with blockchain ID " + item.getBlockchainItemId() +
+                        " is not an allocated material. Type: " + blockchainItem.getItemType());
             }
         }
 
@@ -430,10 +515,18 @@ public class ManufacturerService {
                     }
                 })
                 .exceptionally(ex -> {
-                    // Handle blockchain failure
+                    // Enhanced error handling
+                    String errorMessage = ex.getMessage();
                     savedBatch.setStatus("Failed");
+                    savedBatch.setNotes("Blockchain transaction failed: " + errorMessage);
                     productionBatchRepository.save(savedBatch);
-                    throw new RuntimeException("Failed to create product on blockchain: " + ex.getMessage());
+
+                    // Log detailed error information for debugging
+                    System.err.println("Blockchain transaction failed for batch: " + savedBatch.getBatchNumber());
+                    System.err.println("Materials used: " + sourceItemIds);
+                    System.err.println("Error: " + errorMessage);
+
+                    throw new RuntimeException("Failed to create product on blockchain: " + errorMessage);
                 });
 
         return savedBatch;
@@ -640,6 +733,15 @@ public class ManufacturerService {
 
         public void setQuantity(Long quantity) {
             this.quantity = quantity;
+        }
+
+        @Override
+        public String toString() {
+            return "MaterialBatchItem{" +
+                    "materialId=" + materialId +
+                    ", blockchainItemId=" + blockchainItemId +
+                    ", quantity=" + quantity +
+                    '}';
         }
     }
 
