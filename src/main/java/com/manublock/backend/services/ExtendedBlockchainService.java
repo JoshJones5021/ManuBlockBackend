@@ -1,8 +1,12 @@
 package com.manublock.backend.services;
 
 import com.manublock.backend.models.BlockchainTransaction;
+import com.manublock.backend.models.Chains;
+import com.manublock.backend.models.Items;
 import com.manublock.backend.models.Users;
 import com.manublock.backend.repositories.BlockchainTransactionRepository;
+import com.manublock.backend.repositories.ChainRepository;
+import com.manublock.backend.repositories.ItemRepository;
 import com.manublock.backend.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -12,24 +16,37 @@ import org.web3j.protocol.core.RemoteFunctionCall;
 import java.math.BigInteger;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Extended blockchain service that provides higher-level operations
+ * for interacting with the blockchain and maintains consistent state
+ * in the local database
+ */
 @Service
 public class ExtendedBlockchainService {
 
     private final BlockchainService blockchainService;
     private final BlockchainTransactionRepository transactionRepository;
     private final UserRepository userRepository;
+    private final ChainRepository chainRepository;
+    private final ItemRepository itemRepository;
 
     @Autowired
     public ExtendedBlockchainService(
             BlockchainService blockchainService,
             BlockchainTransactionRepository transactionRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            ChainRepository chainRepository,
+            ItemRepository itemRepository) {
         this.blockchainService = blockchainService;
         this.transactionRepository = transactionRepository;
         this.userRepository = userRepository;
+        this.chainRepository = chainRepository;
+        this.itemRepository = itemRepository;
     }
 
     /**
@@ -61,12 +78,7 @@ public class ExtendedBlockchainService {
 
     /**
      * Creates a new supply chain item on the blockchain
-     * @param itemId Unique ID for the item
-     * @param supplyChainId The supply chain this item belongs to
-     * @param quantity Initial quantity
-     * @param itemType Type descriptor (raw material, product, etc.)
-     * @param creatorId The user ID of the creator
-     * @return CompletableFuture containing the transaction hash
+     * and updates database to maintain consistent state
      */
     public CompletableFuture<String> createItem(
             Long itemId,
@@ -91,7 +103,41 @@ public class ExtendedBlockchainService {
                         itemType,
                         BigInteger.valueOf(creatorId));
 
-        return blockchainService.sendTransactionWithRetry(functionCall, tx);
+        // Send blockchain transaction and update database upon completion
+        return blockchainService.sendTransactionWithRetry(functionCall, tx)
+                .thenApply(txHash -> {
+                    // Create corresponding database entry in Items table
+                    try {
+                        // Find creator user
+                        Optional<Users> creatorOpt = userRepository.findById(creatorId);
+                        // Find supply chain
+                        Optional<Chains> chainOpt = chainRepository.findById(supplyChainId);
+
+                        if (creatorOpt.isPresent() && chainOpt.isPresent()) {
+                            Items newItem = new Items();
+                            newItem.setId(itemId);
+                            newItem.setName(itemType); // Default name based on type
+                            newItem.setItemType(itemType);
+                            newItem.setQuantity(quantity);
+                            newItem.setOwner(creatorOpt.get());
+                            newItem.setSupplyChain(chainOpt.get());
+                            newItem.setStatus("CREATED");
+                            newItem.setCreatedAt(new Date());
+                            newItem.setUpdatedAt(new Date());
+                            newItem.setBlockchainTxHash(txHash);
+                            newItem.setBlockchainStatus("CONFIRMED");
+
+                            // Initialize empty parent IDs list
+                            newItem.setParentItemIds(new ArrayList<>());
+
+                            itemRepository.save(newItem);
+                        }
+                    } catch (Exception e) {
+                        // Log error but don't fail the transaction
+                        System.err.println("Error creating database entry after blockchain item creation: " + e.getMessage());
+                    }
+                    return txHash;
+                });
     }
 
     /**
@@ -126,7 +172,33 @@ public class ExtendedBlockchainService {
                         actionType,
                         BigInteger.valueOf(fromUserId));
 
-        return blockchainService.sendTransactionWithRetry(functionCall, tx);
+        // Send blockchain transaction and update database upon completion
+        return blockchainService.sendTransactionWithRetry(functionCall, tx)
+                .thenApply(txHash -> {
+                    // Update the Items table to reflect new ownership
+                    try {
+                        Optional<Items> itemOpt = itemRepository.findById(itemId);
+                        if (itemOpt.isPresent()) {
+                            Items item = itemOpt.get();
+
+                            // Find the new owner
+                            Optional<Users> newOwnerOpt = userRepository.findById(toUserId);
+                            if (newOwnerOpt.isPresent()) {
+                                // Update owner reference
+                                item.setOwner(newOwnerOpt.get());
+
+                                // Add status history entry
+                                item.setStatus("TRANSFERRED");
+                                item.setUpdatedAt(new Date());
+                                itemRepository.save(item);
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Log error but don't fail the transfer
+                        System.err.println("Error updating database after blockchain transfer: " + e.getMessage());
+                    }
+                    return txHash;
+                });
     }
 
     /**
@@ -177,7 +249,68 @@ public class ExtendedBlockchainService {
                         newItemType,
                         BigInteger.valueOf(processorId));
 
-        return blockchainService.sendTransactionWithRetry(functionCall, tx);
+        // Send blockchain transaction and update database upon completion
+        return blockchainService.sendTransactionWithRetry(functionCall, tx)
+                .thenApply(txHash -> {
+                    try {
+                        // Get necessary data
+                        Optional<Users> processor = userRepository.findById(processorId);
+
+                        // Find first source item to get supply chain
+                        Optional<Items> firstSourceItem = itemRepository.findById(sourceItemIds.get(0));
+
+                        if (processor.isPresent() && firstSourceItem.isPresent()) {
+                            Chains supplyChain = firstSourceItem.get().getSupplyChain();
+
+                            // Create the new processed item in database
+                            Items newItem = new Items();
+                            newItem.setId(newItemId);
+                            newItem.setName(newItemType); // Default name
+                            newItem.setItemType(newItemType);
+                            newItem.setQuantity(outputQuantity);
+                            newItem.setOwner(processor.get());
+                            newItem.setSupplyChain(supplyChain);
+                            newItem.setStatus("PROCESSING");
+                            newItem.setCreatedAt(new Date());
+                            newItem.setUpdatedAt(new Date());
+                            newItem.setBlockchainTxHash(txHash);
+                            newItem.setBlockchainStatus("CONFIRMED");
+
+                            // Store parent IDs
+                            newItem.setParentItemIds(sourceItemIds);
+
+                            itemRepository.save(newItem);
+
+                            // Update source items status
+                            for (int i = 0; i < sourceItemIds.size(); i++) {
+                                Long sourceId = sourceItemIds.get(i);
+                                Long usedQuantity = inputQuantities.get(i);
+
+                                Optional<Items> sourceOpt = itemRepository.findById(sourceId);
+                                if (sourceOpt.isPresent()) {
+                                    Items source = sourceOpt.get();
+
+                                    // Reduce quantity
+                                    source.setQuantity(source.getQuantity() - usedQuantity);
+
+                                    // If fully consumed, mark as completed
+                                    if (source.getQuantity() <= 0) {
+                                        source.setStatus("COMPLETED");
+                                    }
+
+                                    source.setUpdatedAt(new Date());
+                                    itemRepository.save(source);
+                                }
+                            }
+                        }
+
+                    } catch (Exception e) {
+                        // Log error but don't fail the transaction
+                        System.err.println("Error updating database after processing: " + e.getMessage());
+                    }
+
+                    return txHash;
+                });
     }
 
     /**
@@ -202,6 +335,47 @@ public class ExtendedBlockchainService {
                         BigInteger.valueOf(newStatus),
                         BigInteger.valueOf(ownerId));
 
-        return blockchainService.sendTransactionWithRetry(functionCall, tx);
+        // Convert numeric status to string for database
+        String statusString;
+        switch (newStatus) {
+            case 0:
+                statusString = "CREATED";
+                break;
+            case 1:
+                statusString = "IN_TRANSIT";
+                break;
+            case 2:
+                statusString = "PROCESSING";
+                break;
+            case 3:
+                statusString = "COMPLETED";
+                break;
+            case 4:
+                statusString = "REJECTED";
+                break;
+            default:
+                statusString = "UNKNOWN";
+        }
+
+        // Capture status for lambda
+        final String finalStatus = statusString;
+
+        return blockchainService.sendTransactionWithRetry(functionCall, tx)
+                .thenApply(txHash -> {
+                    // Update item status in database
+                    try {
+                        Optional<Items> itemOpt = itemRepository.findById(itemId);
+                        if (itemOpt.isPresent()) {
+                            Items item = itemOpt.get();
+                            item.setStatus(finalStatus);
+                            item.setUpdatedAt(new Date());
+                            itemRepository.save(item);
+                        }
+                    } catch (Exception e) {
+                        // Log error but don't fail the status update
+                        System.err.println("Error updating database item status: " + e.getMessage());
+                    }
+                    return txHash;
+                });
     }
 }

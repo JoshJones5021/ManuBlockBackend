@@ -212,7 +212,7 @@ public class SupplierService {
                 allocatedItem.setName(material.getName());
                 allocatedItem.setItemType("allocated-material");
                 allocatedItem.setQuantity(approvedQuantity);
-                allocatedItem.setOwner(request.getManufacturer()); // Set manufacturer as owner
+                allocatedItem.setOwner(request.getSupplier());
                 allocatedItem.setSupplyChain(request.getSupplyChain());
                 allocatedItem.setStatus("CREATED");
                 allocatedItem.setParentItemIds(List.of(material.getBlockchainItemId()));

@@ -7,6 +7,7 @@ import com.manublock.backend.models.*;
 import com.manublock.backend.repositories.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -55,9 +56,6 @@ public class ManufacturerService {
     @Autowired
     private ItemRepository itemRepository;
 
-    /**
-     * Create a new product
-     */
     /**
      * Create a new product with material quantities
      */
@@ -153,26 +151,10 @@ public class ManufacturerService {
         return productRepository.findById(savedProduct.getId()).orElse(savedProduct);
     }
 
-    public List<Material> getAvailableMaterialsForManufacturer(Long manufacturerId) {
-        // Find all material requests that have been delivered to this manufacturer
-        List<MaterialRequest> deliveredRequests = materialRequestRepository
-                .findByManufacturer_IdAndStatus(manufacturerId, "Delivered");
-
-        // Extract all materials from these requests
-        Set<Long> materialIds = new HashSet<>();
-        for (MaterialRequest request : deliveredRequests) {
-            for (MaterialRequestItem item : request.getItems()) {
-                materialIds.add(item.getMaterial().getId());
-            }
-        }
-
-        // Fetch all these materials
-        return materialRepository.findAllById(materialIds);
-    }
-
     /**
      * Get all materials that have been allocated to this manufacturer via blockchain
-     * and are available to use in production
+     * and are available to use in production.
+     * Only includes materials that have been DELIVERED via transport.
      */
     public List<MaterialDTO> getAvailableMaterialsWithBlockchainIds(Long manufacturerId) {
         try {
@@ -181,6 +163,7 @@ public class ManufacturerService {
                     .orElseThrow(() -> new RuntimeException("Manufacturer not found"));
 
             // Query ONLY items of type "allocated-material" owned by this manufacturer
+            // Items will only be owned by manufacturer after distributor completes delivery
             List<Items> allocatedItems = itemRepository.findByOwner_IdAndItemType(
                     manufacturerId, "allocated-material");
 
@@ -204,7 +187,7 @@ public class ManufacturerService {
                         materialDTO.setUnit(material.getUnit());
                         materialDTO.setQuantity(item.getQuantity());
                         materialDTO.setBlockchainItemId(item.getId());
-                        materialDTO.setItemType(item.getItemType()); // Set the item type
+                        materialDTO.setItemType(item.getItemType());
 
                         availableMaterials.add(materialDTO);
                     }
@@ -216,6 +199,24 @@ public class ManufacturerService {
             throw new RuntimeException("Error fetching allocated materials: " + e.getMessage(), e);
         }
     }
+
+    public List<Material> getAvailableMaterialsForManufacturer(Long manufacturerId) {
+        // Find all material requests that have been delivered to this manufacturer
+        List<MaterialRequest> deliveredRequests = materialRequestRepository
+                .findByManufacturer_IdAndStatus(manufacturerId, "Delivered");
+
+        // Extract all materials from these requests
+        Set<Long> materialIds = new HashSet<>();
+        for (MaterialRequest request : deliveredRequests) {
+            for (MaterialRequestItem item : request.getItems()) {
+                materialIds.add(item.getMaterial().getId());
+            }
+        }
+
+        // Fetch all these materials
+        return materialRepository.findAllById(materialIds);
+    }
+
     /**
      * Deactivate a product (logical deletion)
      */
@@ -324,9 +325,9 @@ public class ManufacturerService {
             MaterialRequest savedRequest = materialRequestRepository.save(request);
             System.out.println("Material request saved with ID: " + savedRequest.getId());
 
-            // Create request items - Fixed the type mismatch here
+            // Create request items
             List<MaterialRequestItem> requestItems = new ArrayList<>();
-            for (MaterialRequestItemCreateDTO item : items) {  // Changed from MaterialRequestItemDTO to MaterialRequestItemCreateDTO
+            for (MaterialRequestItemCreateDTO item : items) {
                 try {
                     Material material = materialRepository.findById(item.getMaterialId()).get();
                     System.out.println("Creating item for material: " + material.getName() +
@@ -348,6 +349,7 @@ public class ManufacturerService {
             }
             // Update request with items
             savedRequest.setItems(requestItems);
+
             // Now record on blockchain if blockchain service is available
             if (blockchainService != null) {
                 try {
@@ -400,6 +402,7 @@ public class ManufacturerService {
     /**
      * Create a production batch to manufacture products
      */
+    @Transactional
     public ProductionBatch createProductionBatch(Long manufacturerId, Long productId,
                                                  Long supplyChainId, Long orderId,
                                                  Long quantity, List<MaterialBatchItem> materials) {

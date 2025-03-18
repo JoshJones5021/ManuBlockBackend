@@ -2,7 +2,9 @@ package com.manublock.backend.controllers;
 
 import com.manublock.backend.dto.*;
 import com.manublock.backend.models.*;
+import com.manublock.backend.repositories.*;
 import com.manublock.backend.services.ManufacturerService;
+import com.manublock.backend.utils.CustomException;
 import com.manublock.backend.utils.DTOConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -29,6 +31,21 @@ public class ManufacturerController {
 
     @Autowired
     private CustomerController customerController;
+
+    @Autowired
+    private ProductRepository productRepository;
+
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private TransportRepository transportRepository;
+
+    @Autowired
+    private ChainRepository chainRepository;
 
     @PostMapping("/products")
     public ResponseEntity<?> createProduct(@RequestBody Map<String, Object> payload) {
@@ -321,6 +338,82 @@ public class ManufacturerController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving available materials: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/orders/{id}/fulfill-from-stock")
+    public ResponseEntity<?> fulfillOrderFromStock(@PathVariable Long id, @RequestBody ProductTransportRequestDTO request) {
+        try {
+            // Find the order
+            Order order = orderRepository.findById(id)
+                    .orElseThrow(() -> new CustomException("Order not found"));
+
+            // Verify all products have sufficient inventory
+            boolean sufficientInventory = true;
+            for (OrderItem item : order.getItems()) {
+                Product product = item.getProduct();
+                if (product.getAvailableQuantity() < item.getQuantity()) {
+                    sufficientInventory = false;
+                    break;
+                }
+            }
+
+            if (!sufficientInventory) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Insufficient inventory for some items"));
+            }
+
+            // Update product quantities
+            for (OrderItem item : order.getItems()) {
+                Product product = item.getProduct();
+                product.setAvailableQuantity(product.getAvailableQuantity() - item.getQuantity());
+                productRepository.save(product);
+
+                // Update item status
+                item.setStatus("Ready for Shipment");
+            }
+
+            // Update order status
+            order.setStatus("Ready for Shipment");
+            Order updatedOrder = orderRepository.save(order);  // Save and get the updated order
+
+            // Create transport entry
+            Transport transport = new Transport();
+            transport.setTrackingNumber("TR-" + System.currentTimeMillis());
+            transport.setType("Product Delivery");
+            transport.setStatus("Scheduled");
+
+            // Set entities
+            Users manufacturer = userRepository.findById(request.getManufacturerId())
+                    .orElseThrow(() -> new CustomException("Manufacturer not found"));
+            Users customer = userRepository.findById(request.getCustomerId())
+                    .orElseThrow(() -> new CustomException("Customer not found"));
+            Users distributor = userRepository.findById(request.getDistributorId())
+                    .orElseThrow(() -> new CustomException("Distributor not found"));
+            Chains supplyChain = chainRepository.findById(request.getSupplyChainId())
+                    .orElseThrow(() -> new CustomException("Supply chain not found"));
+
+            transport.setDistributor(distributor);
+            transport.setSource(manufacturer);
+            transport.setDestination(customer);
+            transport.setOrder(updatedOrder);  // Use the updated order
+            transport.setSupplyChain(supplyChain);
+            transport.setScheduledDeliveryDate(request.getScheduledDeliveryDate());
+            transport.setNotes(request.getNotes());
+
+            Transport savedTransport = transportRepository.save(transport);
+
+            // Create DTO for response using the updated order
+            OrderResponseDTO orderDTO = DTOConverter.convertToOrderDTO(updatedOrder);
+            TransportDTO transportDTO = new TransportDTO(savedTransport);
+
+            return ResponseEntity.ok(Map.of(
+                    "order", orderDTO,
+                    "transport", transportDTO,
+                    "message", "Order fulfilled from stock and ready for shipment"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to fulfill order: " + e.getMessage()));
         }
     }
 }

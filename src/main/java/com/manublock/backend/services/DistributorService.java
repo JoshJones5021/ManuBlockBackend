@@ -29,6 +29,9 @@ public class DistributorService {
     private ChainRepository chainRepository;
 
     @Autowired
+    private ItemRepository itemRepository;
+
+    @Autowired
     private ItemService itemService;
 
     @Autowired
@@ -213,7 +216,6 @@ public class DistributorService {
     /**
      * Record delivery of items
      */
-    // Update the recordDelivery method in DistributorService.java
     public Transport recordDelivery(Long transportId) {
         Transport transport = transportRepository.findById(transportId)
                 .orElseThrow(() -> new RuntimeException("Transport not found"));
@@ -254,6 +256,23 @@ public class DistributorService {
                             transport.setBlockchainTxHash(txHash);
                             transportRepository.save(transport);
                             System.out.println("Blockchain delivery recorded with hash: " + txHash);
+
+                            // Update Items table ownership after successful blockchain transfer
+                            try {
+                                Optional<Items> itemOpt = itemRepository.findById(item.getBlockchainItemId());
+                                if (itemOpt.isPresent()) {
+                                    Items blockchainItem = itemOpt.get();
+                                    blockchainItem.setOwner(transport.getDestination()); // Transfer ownership to manufacturer
+                                    blockchainItem.setStatus("DELIVERED");
+                                    blockchainItem.setUpdatedAt(new Date());
+                                    itemRepository.save(blockchainItem);
+                                    System.out.println("Database item ownership updated for ID: " + item.getBlockchainItemId());
+                                } else {
+                                    System.err.println("Could not find item in database with ID: " + item.getBlockchainItemId());
+                                }
+                            } catch (Exception e) {
+                                System.err.println("Error updating item ownership in database: " + e.getMessage());
+                            }
                         }).exceptionally(ex -> {
                             System.err.println("Blockchain delivery failed: " + ex.getMessage());
                             return null;
@@ -288,6 +307,23 @@ public class DistributorService {
                             transport.setBlockchainTxHash(txHash);
                             transportRepository.save(transport);
                             System.out.println("Blockchain delivery recorded with hash: " + txHash);
+
+                            // Update Items table ownership after successful blockchain transfer
+                            try {
+                                Optional<Items> itemOpt = itemRepository.findById(item.getBlockchainItemId());
+                                if (itemOpt.isPresent()) {
+                                    Items blockchainItem = itemOpt.get();
+                                    blockchainItem.setOwner(transport.getDestination()); // Transfer ownership to customer
+                                    blockchainItem.setStatus("DELIVERED");
+                                    blockchainItem.setUpdatedAt(new Date());
+                                    itemRepository.save(blockchainItem);
+                                    System.out.println("Database item ownership updated for ID: " + item.getBlockchainItemId());
+                                } else {
+                                    System.err.println("Could not find item in database with ID: " + item.getBlockchainItemId());
+                                }
+                            } catch (Exception e) {
+                                System.err.println("Error updating item ownership in database: " + e.getMessage());
+                            }
                         }).exceptionally(ex -> {
                             System.err.println("Blockchain delivery failed: " + ex.getMessage());
                             return null;
