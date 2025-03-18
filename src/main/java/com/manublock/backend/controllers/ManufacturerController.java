@@ -6,6 +6,7 @@ import com.manublock.backend.repositories.*;
 import com.manublock.backend.services.ManufacturerService;
 import com.manublock.backend.utils.CustomException;
 import com.manublock.backend.utils.DTOConverter;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -414,6 +415,29 @@ public class ManufacturerController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to fulfill order: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/materials/request/{requestId}")
+    public ResponseEntity<?> getMaterialRequestById(@PathVariable Long requestId) {
+        try {
+            // Fetch the material request by ID
+            MaterialRequest materialRequest = manufacturerService.getMaterialRequestById(requestId);
+
+            // Convert to DTO to prevent circular references and expose necessary details
+            MaterialRequestDTO requestDTO = new MaterialRequestDTO(materialRequest);
+
+            return ResponseEntity.ok(requestDTO);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body("Material request not found with ID: " + requestId);
+        } catch (Exception e) {
+            // Log the error for server-side tracking
+            System.err.println("Error fetching material request: " + e.getMessage());
+            e.printStackTrace();
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error retrieving material request: " + e.getMessage());
         }
     }
 }

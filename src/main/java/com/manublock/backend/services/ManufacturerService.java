@@ -5,6 +5,7 @@ import com.manublock.backend.dto.MaterialQuantityDTO;
 import com.manublock.backend.dto.MaterialRequestItemCreateDTO;
 import com.manublock.backend.models.*;
 import com.manublock.backend.repositories.*;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -771,5 +772,10 @@ public class ManufacturerService {
         }
 
         return orderRepository.save(order);
+    }
+
+    public MaterialRequest getMaterialRequestById(Long requestId) {
+        return materialRequestRepository.findById(requestId)
+                .orElseThrow(() -> new EntityNotFoundException("Material request not found"));
     }
 }
