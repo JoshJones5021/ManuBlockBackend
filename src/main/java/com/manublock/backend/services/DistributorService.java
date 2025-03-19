@@ -196,15 +196,42 @@ public class DistributorService {
                         Long manufacturerId = item.getProduct().getManufacturer().getId();
                         Long distributorId = transport.getDistributor().getId();
 
+                        String actionType = "product-pickup:distributor:" + distributorId;
+
                         blockchainService.transferItem(
                                 item.getBlockchainItemId(),
                                 distributorId,     // to user ID
                                 item.getQuantity(),
-                                "product-pickup",
+                                actionType,
                                 manufacturerId     // from user ID
-                        );
+                        ).thenAccept(txHash -> {
+                            // Store the transaction hash
+                            transport.setBlockchainTxHash(txHash);
+                            transportRepository.save(transport);
+                            System.out.println("Blockchain product pickup recorded with hash: " + txHash);
+
+                            // Update Items table ownership after successful blockchain transfer
+                            try {
+                                Optional<Items> itemOpt = itemRepository.findById(item.getBlockchainItemId());
+                                if (itemOpt.isPresent()) {
+                                    Items blockchainItem = itemOpt.get();
+                                    blockchainItem.setOwner(transport.getDistributor()); // Transfer ownership to distributor
+                                    blockchainItem.setStatus("IN_TRANSIT");
+                                    blockchainItem.setUpdatedAt(new Date());
+                                    itemRepository.save(blockchainItem);
+                                    System.out.println("Database item ownership updated for ID: " + item.getBlockchainItemId());
+                                } else {
+                                    System.err.println("Could not find item in database with ID: " + item.getBlockchainItemId());
+                                }
+                            } catch (Exception e) {
+                                System.err.println("Error updating item ownership in database: " + e.getMessage());
+                            }
+                        }).exceptionally(ex -> {
+                            System.err.println("Blockchain product pickup failed: " + ex.getMessage());
+                            return null;
+                        });
                     } catch (Exception e) {
-                        System.err.println("Error preparing blockchain transfer: " + e.getMessage());
+                        System.err.println("Error preparing blockchain product pickup: " + e.getMessage());
                     }
                 }
             });

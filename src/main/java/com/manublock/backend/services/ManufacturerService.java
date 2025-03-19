@@ -8,6 +8,7 @@ import com.manublock.backend.repositories.*;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -418,12 +419,25 @@ public class ManufacturerService {
                 .orElseThrow(() -> new RuntimeException("Supply chain not found"));
 
         // Optionally link to an order
-        Order relatedOrder;
+        Order relatedOrder = null;
         if (orderId != null) {
             relatedOrder = orderRepository.findById(orderId)
                     .orElseThrow(() -> new RuntimeException("Order not found"));
-        } else {
-            relatedOrder = null;
+
+            // Validate if order contains this product - add defensive coding
+            boolean orderContainsProduct = false;
+            for (OrderItem item : relatedOrder.getItems()) {
+                if (item.getProduct().getId().equals(productId)) {
+                    orderContainsProduct = true;
+                    break;
+                }
+            }
+
+            if (!orderContainsProduct) {
+                System.err.println("Warning: Order #" + relatedOrder.getOrderNumber() +
+                        " does not contain product ID " + productId);
+                // Continue anyway, as this might be intentional
+            }
         }
 
         // Validate material items
@@ -484,6 +498,11 @@ public class ManufacturerService {
                 .map(MaterialBatchItem::getQuantity)
                 .collect(Collectors.toList());
 
+        // Store necessary IDs to use in the callback
+        final Long savedBatchId = savedBatch.getId();
+        final Long savedProductId = product.getId();
+        final Long savedOrderId = relatedOrder != null ? relatedOrder.getId() : null;
+
         // Use blockchain processing to create the product with all materials as parents
         blockchainService.processItem(
                         sourceItemIds,
@@ -494,41 +513,54 @@ public class ManufacturerService {
                         manufacturerId           // User ID of the processor
                 )
                 .thenAccept(txHash -> {
-                    // Update batch with blockchain info
-                    savedBatch.setBlockchainItemId(blockchainItemId);
-                    savedBatch.setBlockchainTxHash(txHash);
-                    savedBatch.setStatus("In Production");
-                    productionBatchRepository.save(savedBatch);
+                    try {
+                        // Update batch in a new transaction
+                        updateBatchAfterBlockchain(savedBatchId, blockchainItemId, txHash);
 
-                    // Update product available quantity
-                    product.setAvailableQuantity(product.getAvailableQuantity() + quantity);
-                    productRepository.save(product);
+                        // Update product quantity in a new transaction
+                        updateProductQuantity(savedProductId, quantity);
 
-                    // If this batch is for an order, update the order item status
-                    if (relatedOrder != null) {
-                        for (OrderItem orderItem : relatedOrder.getItems()) {
-                            if (orderItem.getProduct().getId().equals(productId)) {
-                                orderItem.setStatus("In Production");
-                                orderItemRepository.save(orderItem);
-                            }
+                        // If this batch is for an order, update the order item status in a new transaction
+                        if (savedOrderId != null) {
+                            updateOrderStatus(savedOrderId, savedProductId);
                         }
 
-                        // Update order status
-                        relatedOrder.setStatus("In Production");
-                        orderRepository.save(relatedOrder);
+                        System.out.println("Successfully processed blockchain transaction for batch " +
+                                savedBatchId + " with hash " + txHash);
+                    } catch (Exception e) {
+                        System.err.println("Error updating entities after blockchain processing: " + e.getMessage());
+                        e.printStackTrace();
+
+                        // Try to mark batch as failed if update methods failed
+                        try {
+                            markBatchAsFailed(savedBatchId,
+                                    "Error updating after blockchain: " + e.getMessage());
+                        } catch (Exception ex) {
+                            System.err.println("Could not mark batch as failed: " + ex.getMessage());
+                        }
                     }
                 })
                 .exceptionally(ex -> {
                     // Enhanced error handling
                     String errorMessage = ex.getMessage();
-                    savedBatch.setStatus("Failed");
-                    savedBatch.setNotes("Blockchain transaction failed: " + errorMessage);
-                    productionBatchRepository.save(savedBatch);
+                    Throwable rootCause = ex.getCause();
+                    String rootCauseMsg = rootCause != null ? rootCause.getMessage() : "Unknown";
+
+                    try {
+                        markBatchAsFailed(savedBatchId,
+                                "Blockchain transaction failed: " + errorMessage + ". Root cause: " + rootCauseMsg);
+                    } catch (Exception e) {
+                        System.err.println("Could not mark batch as failed: " + e.getMessage());
+                    }
 
                     // Log detailed error information for debugging
-                    System.err.println("Blockchain transaction failed for batch: " + savedBatch.getBatchNumber());
+                    System.err.println("Blockchain transaction failed for batch: " + batchNumber);
+                    System.err.println("Batch ID: " + savedBatchId);
                     System.err.println("Materials used: " + sourceItemIds);
-                    System.err.println("Error: " + errorMessage);
+                    System.err.println("Order ID: " + savedOrderId);
+                    System.err.println("Error message: " + errorMessage);
+                    System.err.println("Root cause: " + rootCauseMsg);
+                    ex.printStackTrace();
 
                     throw new RuntimeException("Failed to create product on blockchain: " + errorMessage);
                 });
@@ -777,5 +809,114 @@ public class ManufacturerService {
     public MaterialRequest getMaterialRequestById(Long requestId) {
         return materialRequestRepository.findById(requestId)
                 .orElseThrow(() -> new EntityNotFoundException("Material request not found"));
+    }
+
+    /**
+     * Create a blockchain item for a product and store it in the Items table
+     */
+    public void createBlockchainItemForProduct(OrderItem item, Product product, Users manufacturer, Chains supplyChain) {
+        try {
+            // Generate a unique blockchain ID
+            Long blockchainItemId = generateUniqueBlockchainId();
+
+            // Create blockchain item for the product
+            blockchainService.createItem(
+                    blockchainItemId,
+                    supplyChain.getId(),
+                    item.getQuantity(),
+                    "manufactured-product",
+                    manufacturer.getId() // Creator is the manufacturer
+            ).thenAccept(txHash -> {
+                // Update order item with blockchain ID
+                item.setBlockchainItemId(blockchainItemId);
+                orderItemRepository.save(item);
+
+                // Also create an Items record in the database
+                Items productItem = new Items();
+                productItem.setId(blockchainItemId);
+                productItem.setName(product.getName());
+                productItem.setItemType("manufactured-product");
+                productItem.setQuantity(item.getQuantity());
+                productItem.setOwner(manufacturer);
+                productItem.setSupplyChain(supplyChain);
+                productItem.setStatus("CREATED");
+                productItem.setBlockchainTxHash(txHash);
+                productItem.setBlockchainStatus("CONFIRMED");
+                productItem.setCreatedAt(new Date());
+                productItem.setUpdatedAt(new Date());
+
+                itemRepository.save(productItem);
+
+                System.out.println("Created blockchain record for product: " + product.getName() +
+                        " with ID: " + blockchainItemId);
+            }).exceptionally(ex -> {
+                System.err.println("Failed to create blockchain item for product: " +
+                        product.getName() + " - " + ex.getMessage());
+                return null;
+            });
+        } catch (Exception e) {
+            System.err.println("Error creating blockchain item for product: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void updateBatchAfterBlockchain(Long batchId, Long blockchainItemId, String txHash) {
+        ProductionBatch batch = productionBatchRepository.findById(batchId)
+                .orElseThrow(() -> new RuntimeException("Batch not found: " + batchId));
+
+        batch.setBlockchainItemId(blockchainItemId);
+        batch.setBlockchainTxHash(txHash);
+        batch.setStatus("In Production");
+        productionBatchRepository.save(batch);
+
+        System.out.println("Updated batch " + batchId + " with blockchain information");
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void updateProductQuantity(Long productId, Long quantity) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Product not found: " + productId));
+
+        product.setAvailableQuantity(product.getAvailableQuantity() + quantity);
+        productRepository.save(product);
+
+        System.out.println("Updated product " + productId + " quantity, added " + quantity);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void updateOrderStatus(Long orderId, Long productId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
+
+        boolean updatedAnyItem = false;
+
+        for (OrderItem orderItem : order.getItems()) {
+            if (orderItem.getProduct().getId().equals(productId)) {
+                orderItem.setStatus("In Production");
+                orderItemRepository.save(orderItem);
+                updatedAnyItem = true;
+            }
+        }
+
+        if (updatedAnyItem) {
+            order.setStatus("In Production");
+            orderRepository.save(order);
+            System.out.println("Updated order " + orderId + " status to In Production");
+        } else {
+            System.err.println("Warning: Order " + orderId + " does not contain product " + productId);
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markBatchAsFailed(Long batchId, String reason) {
+        ProductionBatch batch = productionBatchRepository.findById(batchId)
+                .orElseThrow(() -> new RuntimeException("Batch not found: " + batchId));
+
+        batch.setStatus("Failed");
+        batch.setNotes(reason);
+        productionBatchRepository.save(batch);
+
+        System.out.println("Marked batch " + batchId + " as failed: " + reason);
     }
 }

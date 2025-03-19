@@ -377,12 +377,6 @@ public class ManufacturerController {
             order.setStatus("Ready for Shipment");
             Order updatedOrder = orderRepository.save(order);  // Save and get the updated order
 
-            // Create transport entry
-            Transport transport = new Transport();
-            transport.setTrackingNumber("TR-" + System.currentTimeMillis());
-            transport.setType("Product Delivery");
-            transport.setStatus("Scheduled");
-
             // Set entities
             Users manufacturer = userRepository.findById(request.getManufacturerId())
                     .orElseThrow(() -> new CustomException("Manufacturer not found"));
@@ -393,6 +387,27 @@ public class ManufacturerController {
             Chains supplyChain = chainRepository.findById(request.getSupplyChainId())
                     .orElseThrow(() -> new CustomException("Supply chain not found"));
 
+            // Create blockchain items for products using the manufacturerService
+            for (OrderItem item : order.getItems()) {
+                Product product = item.getProduct();
+
+                // Check if blockchain ID is already present
+                if (item.getBlockchainItemId() == null) {
+                    // Call the service method to handle blockchain item creation
+                    manufacturerService.createBlockchainItemForProduct(
+                            item,
+                            product,
+                            manufacturer,
+                            supplyChain
+                    );
+                }
+            }
+
+            // Create transport entry
+            Transport transport = new Transport();
+            transport.setTrackingNumber("TR-" + System.currentTimeMillis());
+            transport.setType("Product Delivery");
+            transport.setStatus("Scheduled");
             transport.setDistributor(distributor);
             transport.setSource(manufacturer);
             transport.setDestination(customer);
@@ -413,6 +428,7 @@ public class ManufacturerController {
                     "message", "Order fulfilled from stock and ready for shipment"
             ));
         } catch (Exception e) {
+            e.printStackTrace(); // Log the full exception
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to fulfill order: " + e.getMessage()));
         }

@@ -28,6 +28,9 @@ public class CustomerService {
     private ChainRepository chainRepository;
 
     @Autowired
+    private ItemRepository itemRepository;
+
+    @Autowired
     private ItemService itemService;
 
     @Autowired
@@ -131,6 +134,9 @@ public class CustomerService {
     /**
      * Confirm order delivery
      */
+    /**
+     * Confirm order delivery
+     */
     public Order confirmDelivery(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
@@ -151,7 +157,32 @@ public class CustomerService {
 
             // Update blockchain status if item has a blockchain ID
             if (item.getBlockchainItemId() != null) {
-                blockchainService.updateItemStatus(item.getBlockchainItemId(), 3, order.getCustomer().getId()); // 3 = COMPLETED
+                blockchainService.updateItemStatus(
+                        item.getBlockchainItemId(),
+                        3,  // 3 = COMPLETED status
+                        order.getCustomer().getId()
+                ).thenAccept(txHash -> {
+                    // Log the successful transaction
+                    System.out.println("Blockchain item status updated with hash: " + txHash);
+
+                    // Update Items table record
+                    try {
+                        Optional<Items> itemOpt = itemRepository.findById(item.getBlockchainItemId());
+                        if (itemOpt.isPresent()) {
+                            Items blockchainItem = itemOpt.get();
+                            blockchainItem.setStatus("COMPLETED");
+                            blockchainItem.setUpdatedAt(new Date());
+                            blockchainItem.setBlockchainTxHash(txHash);
+                            itemRepository.save(blockchainItem);
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Error updating Items record: " + e.getMessage());
+                    }
+                }).exceptionally(ex -> {
+                    // Log the error
+                    System.err.println("Failed to update blockchain status: " + ex.getMessage());
+                    return null;
+                });
             }
         }
 

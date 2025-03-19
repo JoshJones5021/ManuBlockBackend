@@ -1,11 +1,13 @@
 package com.manublock.backend.controllers;
 
 import com.manublock.backend.dto.MaterialRequestDTO;
+import com.manublock.backend.dto.OrderResponseDTO;
 import com.manublock.backend.dto.TransportDTO;
 import com.manublock.backend.models.MaterialRequest;
 import com.manublock.backend.models.Order;
 import com.manublock.backend.models.Transport;
 import com.manublock.backend.services.DistributorService;
+import com.manublock.backend.utils.DTOConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -168,7 +170,13 @@ public class DistributorController {
     public ResponseEntity<?> getReadyOrders() {
         try {
             List<Order> orders = distributorService.getReadyOrders();
-            return ResponseEntity.ok(orders);
+
+            // Convert to DTOs to prevent circular references
+            List<OrderResponseDTO> orderDTOs = orders.stream()
+                    .map(DTOConverter::convertToOrderDTO)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(orderDTOs);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving ready orders: " + e.getMessage());
