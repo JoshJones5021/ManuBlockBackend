@@ -411,8 +411,9 @@ public class ManufacturerController {
             transport.setDistributor(distributor);
             transport.setSource(manufacturer);
             transport.setDestination(customer);
-            transport.setOrder(updatedOrder);  // Use the updated order
+            transport.setOrder(updatedOrder);
             transport.setSupplyChain(supplyChain);
+            transport.setScheduledPickupDate(request.getScheduledPickupDate());  // Add this line
             transport.setScheduledDeliveryDate(request.getScheduledDeliveryDate());
             transport.setNotes(request.getNotes());
 

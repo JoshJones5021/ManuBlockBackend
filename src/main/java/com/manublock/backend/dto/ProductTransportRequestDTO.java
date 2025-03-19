@@ -8,6 +8,7 @@ public class ProductTransportRequestDTO {
     private Long distributorId;
     private Long supplyChainId;
     private Date scheduledDeliveryDate;
+    private Date scheduledPickupDate;
     private String notes;
 
     public Long getManufacturerId() {
@@ -56,5 +57,13 @@ public class ProductTransportRequestDTO {
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public Date getScheduledPickupDate() {
+        return scheduledPickupDate;
+    }
+
+    public void setScheduledPickupDate(Date scheduledPickupDate) {
+        this.scheduledPickupDate = scheduledPickupDate;
     }
 }
