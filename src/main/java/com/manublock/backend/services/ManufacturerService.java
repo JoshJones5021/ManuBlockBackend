@@ -238,7 +238,6 @@ public class ManufacturerService {
     public MaterialRequest requestMaterials(Long manufacturerId,
                                             Long supplierId,
                                             Long supplyChainId,
-                                            Long orderId,
                                             List<MaterialRequestItemCreateDTO> items,
                                             Date requestedDeliveryDate,
                                             String notes) {
@@ -262,19 +261,6 @@ public class ManufacturerService {
                         System.err.println("Supply chain not found with ID: " + supplyChainId);
                         return new RuntimeException("Supply chain not found with ID: " + supplyChainId);
                     });
-
-            // Optionally link to an order
-            Order relatedOrder = null;
-            if (orderId != null) {
-                try {
-                    relatedOrder = orderRepository.findById(orderId)
-                            .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
-                    System.out.println("Related order found: " + relatedOrder.getId());
-                } catch (Exception e) {
-                    System.err.println("Error finding related order: " + e.getMessage());
-                    // Continue without the order
-                }
-            }
 
             // Validate items
             System.out.println("Validating " + (items != null ? items.size() : "null") + " material items");
@@ -316,7 +302,6 @@ public class ManufacturerService {
             request.setManufacturer(manufacturer);
             request.setSupplier(supplier);
             request.setSupplyChain(supplyChain);
-            request.setRelatedOrder(relatedOrder);
             request.setStatus("Requested"); // Using default status if not provided
             request.setRequestedDeliveryDate(requestedDeliveryDate);
             request.setNotes(notes);

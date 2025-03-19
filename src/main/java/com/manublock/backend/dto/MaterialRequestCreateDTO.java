@@ -7,7 +7,6 @@ public class MaterialRequestCreateDTO {
     private Long manufacturerId;
     private Long supplierId;
     private Long supplyChainId;
-    private Long orderId;
     private List<MaterialRequestItemCreateDTO> items;
     private Date requestedDeliveryDate;
     private String notes;
@@ -36,14 +35,6 @@ public class MaterialRequestCreateDTO {
 
     public void setSupplyChainId(Long supplyChainId) {
         this.supplyChainId = supplyChainId;
-    }
-
-    public Long getOrderId() {
-        return orderId;
-    }
-
-    public void setOrderId(Long orderId) {
-        this.orderId = orderId;
     }
 
     public List<MaterialRequestItemCreateDTO> getItems() {

@@ -24,10 +24,6 @@ public class MaterialRequest {
     private Users supplier;
 
     @ManyToOne
-    @JoinColumn(name = "order_id")
-    private Order relatedOrder; // Optional - may be related to a specific order
-
-    @ManyToOne
     @JoinColumn(name = "supply_chain_id", nullable = false)
     private Chains supplyChain;
 
@@ -86,14 +82,6 @@ public class MaterialRequest {
 
     public void setSupplier(Users supplier) {
         this.supplier = supplier;
-    }
-
-    public Order getRelatedOrder() {
-        return relatedOrder;
-    }
-
-    public void setRelatedOrder(Order relatedOrder) {
-        this.relatedOrder = relatedOrder;
     }
 
     public Chains getSupplyChain() {

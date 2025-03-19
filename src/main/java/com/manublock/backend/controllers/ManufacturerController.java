@@ -137,7 +137,6 @@ public class ManufacturerController {
                     requestDTO.getManufacturerId(),
                     requestDTO.getSupplierId(),
                     requestDTO.getSupplyChainId(),
-                    requestDTO.getOrderId(),
                     requestDTO.getItems(),
                     requestDTO.getRequestedDeliveryDate(),
                     requestDTO.getNotes()

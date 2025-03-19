@@ -12,7 +12,6 @@ public interface MaterialRequestRepository extends JpaRepository<MaterialRequest
     List<MaterialRequest> findBySupplier_Id(Long supplierId);
     List<MaterialRequest> findBySupplyChain_Id(Long supplyChainId);
     List<MaterialRequest> findByStatus(String status);
-    List<MaterialRequest> findByRelatedOrder_Id(Long orderId);
     MaterialRequest findByRequestNumber(String requestNumber);
 
     // Additional methods
