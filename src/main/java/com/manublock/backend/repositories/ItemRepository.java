@@ -13,4 +13,7 @@ public interface ItemRepository extends JpaRepository<Items, Long> {
     List<Items> findByStatus(String status);
     List<Items> findByItemType(String itemType);
     List<Items> findByOwner_IdAndItemType(Long ownerId, String itemType);
+
+    // New methods for recycling
+    List<Items> findByOwner_IdAndStatus(Long ownerId, String status);
 }

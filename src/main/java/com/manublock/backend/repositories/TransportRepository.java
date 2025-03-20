@@ -21,4 +21,8 @@ public interface TransportRepository extends JpaRepository<Transport, Long> {
     // Additional methods
     List<Transport> findByDistributor_IdAndStatus(Long distributorId, String status);
     List<Transport> findByDistributor_IdAndType(Long distributorId, String type);
+
+    // New methods for recycling
+    List<Transport> findBySource_IdAndType(Long sourceId, String type);
+    List<Transport> findByTypeAndStatusIn(String type, List<String> statuses);
 }

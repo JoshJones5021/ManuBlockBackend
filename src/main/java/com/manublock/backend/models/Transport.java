@@ -32,6 +32,10 @@ public class Transport {
     private MaterialRequest materialRequest; // If transporting materials
 
     @ManyToOne
+    @JoinColumn(name = "recycled_item_id")
+    private Items recycledItem;
+
+    @ManyToOne
     @JoinColumn(name = "order_id")
     private Order order; // If transporting finished products
 
@@ -245,5 +249,13 @@ public class Transport {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = new Date();
+    }
+
+    public Items getRecycledItem() {
+        return recycledItem;
+    }
+
+    public void setRecycledItem(Items recycledItem) {
+        this.recycledItem = recycledItem;
     }
 }

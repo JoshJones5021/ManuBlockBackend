@@ -45,6 +45,12 @@ public class Items {
     @Column
     private String blockchainStatus;
 
+    @Column
+    private String notes;
+
+    @Column
+    private String pickupAddress;
+
     @Temporal(TemporalType.TIMESTAMP)
     private Date createdAt;
 
@@ -146,5 +152,21 @@ public class Items {
 
     public void setUpdatedAt(Date updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getPickupAddress() {
+        return pickupAddress;
+    }
+
+    public void setPickupAddress(String pickupAddress) {
+        this.pickupAddress = pickupAddress;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
     }
 }
