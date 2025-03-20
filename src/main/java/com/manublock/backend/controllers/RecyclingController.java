@@ -230,30 +230,6 @@ public class RecyclingController {
     }
 
     /**
-     * Refurbish a recycled product for resale
-     */
-    @PostMapping("/manufacturer/refurbish")
-    public ResponseEntity<?> refurbishProduct(@RequestBody Map<String, Object> payload) {
-        try {
-            Long manufacturerId = Long.valueOf(payload.get("manufacturerId").toString());
-            Long itemId = Long.valueOf(payload.get("itemId").toString());
-            String quality = (String) payload.get("quality");
-            String notes = (String) payload.get("notes");
-
-            Product refurbishedProduct = recyclingService.refurbishProduct(
-                    manufacturerId, itemId, quality, notes);
-
-            return ResponseEntity.ok(Map.of(
-                    "message", "Product refurbished successfully",
-                    "product", ProductDTO.fromEntity(refurbishedProduct)
-            ));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error refurbishing product: " + e.getMessage()));
-        }
-    }
-
-    /**
      * Get all recycled materials for a manufacturer
      */
     @GetMapping("/manufacturer/materials/{manufacturerId}")
@@ -270,26 +246,6 @@ public class RecyclingController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error retrieving recycled materials: " + e.getMessage()));
-        }
-    }
-
-    /**
-     * Get all refurbished products for a manufacturer
-     */
-    @GetMapping("/manufacturer/products/{manufacturerId}")
-    public ResponseEntity<?> getRefurbishedProducts(@PathVariable Long manufacturerId) {
-        try {
-            List<Product> products = recyclingService.getRefurbishedProductsByManufacturer(manufacturerId);
-
-            // Convert to DTOs to prevent circular references
-            List<ProductDTO> productDTOs = products.stream()
-                    .map(ProductDTO::fromEntity)
-                    .collect(Collectors.toList());
-
-            return ResponseEntity.ok(productDTOs);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error retrieving refurbished products: " + e.getMessage()));
         }
     }
 }

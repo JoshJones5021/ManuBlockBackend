@@ -13,4 +13,5 @@ public interface MaterialRepository extends JpaRepository<Material, Long> {
     List<Material> findByActiveTrue();
     List<Material> findByActiveTrueAndSupplier_Id(Long supplierId);
     Optional<Material> findByBlockchainItemId(Long blockchainItemId);
+    List<Material> findByNameAndSupplier_Id(String name, Long supplierId);
 }

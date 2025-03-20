@@ -8,12 +8,14 @@ import java.util.List;
 
 @Repository
 public interface ItemRepository extends JpaRepository<Items, Long> {
-    List<Items> findBySupplyChain_Id(Long supplyChainId);
-    List<Items> findByOwner_Id(Long ownerId);
-    List<Items> findByStatus(String status);
-    List<Items> findByItemType(String itemType);
-    List<Items> findByOwner_IdAndItemType(Long ownerId, String itemType);
 
-    // New methods for recycling
+    List<Items> findBySupplyChain_Id(Long supplyChainId);
+
+    List<Items> findByOwner_Id(Long ownerId);
+
+    List<Items> findByStatus(String status);
+
     List<Items> findByOwner_IdAndStatus(Long ownerId, String status);
+
+    List<Items> findByOwner_IdAndItemTypeIn(Long ownerId, List<String> itemTypes);
 }

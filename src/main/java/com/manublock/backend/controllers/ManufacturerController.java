@@ -7,16 +7,14 @@ import com.manublock.backend.services.ManufacturerService;
 import com.manublock.backend.utils.CustomException;
 import com.manublock.backend.utils.DTOConverter;
 import jakarta.persistence.EntityNotFoundException;
+import org.hibernate.cache.spi.support.AbstractReadWriteAccess;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
@@ -47,6 +45,12 @@ public class ManufacturerController {
 
     @Autowired
     private ChainRepository chainRepository;
+
+    @Autowired
+    private ItemRepository itemRepository;
+
+    @Autowired
+    private MaterialRepository materialRepository;
 
     @PostMapping("/products")
     public ResponseEntity<?> createProduct(@RequestBody Map<String, Object> payload) {
@@ -455,5 +459,71 @@ public class ManufacturerController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving material request: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/product/{productId}/materials")
+    public ResponseEntity<?> getProductMaterials(@PathVariable Long productId) {
+        try {
+            // First check if the item exists
+            Optional<Items> itemOpt = itemRepository.findById(productId);
+            if (!itemOpt.isPresent()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Product not found with ID: " + productId));
+            }
+
+            Items item = itemOpt.get();
+            Users manufacturer = item.getOwner();
+
+            // Get materials associated with this manufacturer
+            List<Material> materialsList = materialRepository.findByActiveTrueAndSupplier_Id(manufacturer.getId());
+
+            // If that's empty, try using the supply chain ID instead
+            if (materialsList.isEmpty() && item.getSupplyChain() != null) {
+                Long supplyChainId = item.getSupplyChain().getId();
+                materialsList = materialRepository.findByActiveTrueAndSupplier_Id(supplyChainId);
+            }
+
+            // If still no materials found, return standard recyclable materials
+            if (materialsList.isEmpty()) {
+                List<Map<String, Object>> commonMaterials = new ArrayList<>();
+                commonMaterials.add(createMaterialInfo("Aluminum", "Recycled aluminum", "kg"));
+                commonMaterials.add(createMaterialInfo("Plastic", "Recycled plastic", "kg"));
+                commonMaterials.add(createMaterialInfo("Glass", "Recycled glass", "kg"));
+                commonMaterials.add(createMaterialInfo("Circuit Board", "Recycled electronics", "kg"));
+                commonMaterials.add(createMaterialInfo("Copper Wire", "Recycled copper", "kg"));
+                return ResponseEntity.ok(commonMaterials);
+            }
+
+            // Convert to Maps for the response
+            List<Map<String, Object>> materialInfoList = materialsList.stream()
+                    .map(material -> {
+                        Map<String, Object> info = new HashMap<>();
+                        info.put("id", material.getId());
+                        info.put("name", material.getName());
+                        info.put("description", material.getDescription() != null ?
+                                material.getDescription() : "Recycled " + material.getName());
+                        info.put("unit", material.getUnit() != null ? material.getUnit() : "kg");
+                        info.put("specifications", material.getSpecifications());
+                        return info;
+                    })
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(materialInfoList);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error retrieving product materials: " + e.getMessage()));
+        }
+    }
+
+    // Helper method to create material info for fallback case
+    private Map<String, Object> createMaterialInfo(String name, String description, String unit) {
+        Map<String, Object> info = new HashMap<>();
+        info.put("id", null);  // No ID for these fallback materials
+        info.put("name", name);
+        info.put("description", description);
+        info.put("unit", unit);
+        info.put("specifications", "Standard");
+        return info;
     }
 }

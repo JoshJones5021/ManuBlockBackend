@@ -378,4 +378,37 @@ public class ExtendedBlockchainService {
                     return txHash;
                 });
     }
+
+    public CompletableFuture<String> createOrderOnBlockchain(
+            Long orderId,
+            Long supplyChainId,
+            Long customerId,
+            Long quantity
+    ) {
+        BlockchainTransaction tx = new BlockchainTransaction();
+        tx.setFunction("createOrder");
+        tx.setParameters(orderId + "," + supplyChainId + "," + customerId);
+        tx.setStatus("PENDING");
+        tx.setCreatedAt(Instant.now());
+        tx.setRetryCount(0);
+        transactionRepository.save(tx);
+
+        // Assuming your smart contract has a `createItem()` function that logs orders as blockchain items
+        RemoteFunctionCall<TransactionReceipt> functionCall =
+                blockchainService.getContract().createItem(
+                        BigInteger.valueOf(orderId),
+                        BigInteger.valueOf(supplyChainId),
+                        BigInteger.valueOf(quantity),
+                        "ORDER",
+                        BigInteger.valueOf(customerId)
+                );
+
+        // Send the transaction and handle DB update
+        return blockchainService.sendTransactionWithRetry(functionCall, tx)
+                .thenApply(txHash -> {
+                    // Optional: Log or update something in your DB if needed
+                    System.out.println("Order created on blockchain with txHash: " + txHash);
+                    return txHash;
+                });
+    }
 }

@@ -164,41 +164,73 @@ public class ManufacturerService {
             Users manufacturer = userRepository.findById(manufacturerId)
                     .orElseThrow(() -> new RuntimeException("Manufacturer not found"));
 
-            // Query ONLY items of type "allocated-material" owned by this manufacturer
-            // Items will only be owned by manufacturer after distributor completes delivery
-            List<Items> allocatedItems = itemRepository.findByOwner_IdAndItemType(
-                    manufacturerId, "allocated-material");
+            // Query both allocated-materials AND recycled-materials owned by this manufacturer
+            // without filtering by status
+            List<String> materialTypes = Arrays.asList("allocated-material", "recycled-material");
+            List<Items> availableItems = itemRepository.findByOwner_IdAndItemTypeIn(
+                    manufacturerId, materialTypes);
 
             List<MaterialDTO> availableMaterials = new ArrayList<>();
 
-            for (Items item : allocatedItems) {
-                // Get the parent material ID from parentItemIds
-                List<Long> parentIds = item.getParentItemIds();
+            for (Items item : availableItems) {
+                MaterialDTO materialDTO = new MaterialDTO();
 
-                if (parentIds != null && !parentIds.isEmpty()) {
-                    // Find the original material based on blockchain item ID
-                    Optional<Material> originalMaterial = materialRepository.findByBlockchainItemId(parentIds.get(0));
+                // Set the blockchain ID for selection in the frontend
+                materialDTO.setBlockchainItemId(item.getId());
 
-                    if (originalMaterial.isPresent()) {
-                        Material material = originalMaterial.get();
+                // For recycled materials, we can use the item name directly
+                materialDTO.setName(item.getName());
+                materialDTO.setQuantity(item.getQuantity());
+                materialDTO.setItemType(item.getItemType());
 
-                        MaterialDTO materialDTO = new MaterialDTO();
-                        materialDTO.setId(material.getId());
-                        materialDTO.setName(item.getName());
-                        materialDTO.setDescription(material.getDescription());
-                        materialDTO.setUnit(material.getUnit());
-                        materialDTO.setQuantity(item.getQuantity());
-                        materialDTO.setBlockchainItemId(item.getId());
-                        materialDTO.setItemType(item.getItemType());
+                // Look up material in materials table if possible
+                Material materialRecord = null;
 
-                        availableMaterials.add(materialDTO);
+                if (item.getItemType().equals("recycled-material")) {
+                    // For recycled materials, try to find by blockchain ID
+                    Optional<Material> materialOpt = materialRepository.findByBlockchainItemId(item.getId());
+                    if (materialOpt.isPresent()) {
+                        materialRecord = materialOpt.get();
+                    }
+                } else if (item.getParentItemIds() != null && !item.getParentItemIds().isEmpty()) {
+                    // For allocated materials, find by parent ID
+                    Optional<Material> materialOpt = materialRepository.findByBlockchainItemId(item.getParentItemIds().get(0));
+                    if (materialOpt.isPresent()) {
+                        materialRecord = materialOpt.get();
                     }
                 }
+
+                // If we found a material record, use its properties
+                if (materialRecord != null) {
+                    // Use ID from material record for reference
+                    materialDTO.setId(materialRecord.getId());
+
+                    // If item name is missing or generic, use material name
+                    if (materialDTO.getName() == null || materialDTO.getName().equals(item.getItemType())) {
+                        materialDTO.setName(materialRecord.getName());
+                    }
+
+                    // Add additional information from material record
+                    materialDTO.setDescription(materialRecord.getDescription());
+                    materialDTO.setUnit(materialRecord.getUnit());
+                } else {
+                    // Set defaults if no material record found
+                    materialDTO.setId(null);
+                    materialDTO.setUnit("kg");
+                    materialDTO.setDescription("Material from blockchain");
+                }
+
+                // Add source indicator to clearly identify recycled materials
+                if (item.getItemType().equals("recycled-material")) {
+                    materialDTO.setName(materialDTO.getName() + " (Recycled)");
+                }
+
+                availableMaterials.add(materialDTO);
             }
 
             return availableMaterials;
         } catch (Exception e) {
-            throw new RuntimeException("Error fetching allocated materials: " + e.getMessage(), e);
+            throw new RuntimeException("Error fetching available materials: " + e.getMessage(), e);
         }
     }
 

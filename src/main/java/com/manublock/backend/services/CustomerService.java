@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -100,8 +101,34 @@ public class CustomerService {
         // Update order with items
         savedOrder.setItems(orderItems);
 
-        return savedOrder;
+        // 🔗 Blockchain Transaction - Send total quantity
+        try {
+            // Calculate total quantity
+            Long totalQuantity = items.stream()
+                    .mapToLong(OrderItemDTO::getQuantity)
+                    .sum();
+
+            CompletableFuture<String> blockchainTx = blockchainService.createOrderOnBlockchain(
+                    savedOrder.getId(),        // Order ID
+                    supplyChain.getId(),       // Supply chain ID
+                    customer.getId(),          // Customer ID
+                    totalQuantity              // Total quantity
+            );
+
+            // Optionally block or use async handling
+            String blockchainTxHash = blockchainTx.get(); // Blocking for now, or handle asynchronously
+            savedOrder.setBlockchainTxHash(blockchainTxHash);
+
+        } catch (Exception e) {
+            System.err.println("Blockchain order creation failed: " + e.getMessage());
+            // Optional: handle retry or mark order as 'Pending Blockchain'
+        }
+
+        // Final save with blockchain hash
+        return orderRepository.save(savedOrder);
     }
+
+
 
     /**
      * Cancel an order (if possible)
