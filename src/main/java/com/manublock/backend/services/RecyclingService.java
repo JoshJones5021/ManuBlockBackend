@@ -5,8 +5,8 @@ import com.manublock.backend.repositories.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -34,12 +34,8 @@ public class RecyclingService {
     private ExtendedBlockchainService blockchainService;
 
     @Autowired
-    private BlockchainTransactionRepository transactionRepository;
-
-    @Autowired
     private OrderItemRepository orderItemRepository;
 
-    // CUSTOMER: Mark item as churned for recycling
     public Items markItemAsChurned(Long itemId, Long customerId, String notes, String pickupAddress) {
         Items item = itemRepository.findById(itemId).orElseThrow(() -> new RuntimeException("Item not found"));
 

@@ -24,10 +24,7 @@ import java.util.logging.Logger;
 public class BlockchainService {
 
     private final Web3j web3j;
-    private final Credentials credentials;
-    private final String contractAddress;
     private final BlockchainTransactionRepository transactionRepository;
-    private final DynamicGasProviderService gasProviderService;
     private final SmartContract contract;
 
     @Autowired
@@ -41,9 +38,6 @@ public class BlockchainService {
             BlockchainTransactionRepository transactionRepository) {
 
         this.web3j = web3j;
-        this.credentials = credentials;
-        this.gasProviderService = gasProviderService;
-        this.contractAddress = contractAddress;
         this.transactionRepository = transactionRepository;
 
         // Use dynamic gas provider for loading contracts

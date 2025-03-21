@@ -1,15 +1,15 @@
 package com.manublock.backend.services;
 
 import com.manublock.backend.dto.ChainResponseDTO;
-import com.manublock.backend.dto.NodeResponseDTO;
 import com.manublock.backend.dto.EdgeResponseDTO;
-import com.manublock.backend.models.Edges;
+import com.manublock.backend.dto.NodeResponseDTO;
 import com.manublock.backend.models.Chains;
+import com.manublock.backend.models.Edges;
 import com.manublock.backend.models.Nodes;
 import com.manublock.backend.models.Users;
+import com.manublock.backend.repositories.ChainRepository;
 import com.manublock.backend.repositories.EdgeRepository;
 import com.manublock.backend.repositories.NodeRepository;
-import com.manublock.backend.repositories.ChainRepository;
 import com.manublock.backend.repositories.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -114,26 +114,6 @@ public class ChainService {
     }
 
     /**
-     * Retry a failed blockchain registration
-     */
-    public boolean retryBlockchainRegistration(Long chainId) {
-        Chains chain = chainRepository.findById(chainId)
-                .orElseThrow(() -> new RuntimeException("Supply chain not found"));
-
-        if (!"FAILED".equals(chain.getBlockchainStatus())) {
-            LOGGER.warning("Cannot retry blockchain registration for chain " + chainId +
-                    " with status " + chain.getBlockchainStatus());
-            return false;
-        }
-
-        chain.setBlockchainStatus("PENDING");
-        chainRepository.save(chain);
-
-        registerSupplyChainOnBlockchain(chain);
-        return true;
-    }
-
-    /**
      * Get all supply chains with their blockchain status
      */
     public List<ChainResponseDTO> getAllSupplyChains() {
@@ -189,94 +169,6 @@ public class ChainService {
     public Chains getSupplyChainById(Long id) {
         return chainRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Supply Chain not found"));
-    }
-
-    /**
-     * Update a supply chain - only if not finalized
-     */
-    public Chains updateSupplyChain(Long id, Chains updatedChains) {
-        Chains existingChains = chainRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Supply Chain not found"));
-
-        // Check if chain is finalized
-        if ("FINALIZED".equals(existingChains.getBlockchainStatus())) {
-            throw new RuntimeException("Cannot update a finalized supply chain");
-        }
-
-        // Check if chain has failed blockchain status
-        if ("FAILED".equals(existingChains.getBlockchainStatus())) {
-            throw new RuntimeException("Cannot update a supply chain with failed blockchain status");
-        }
-
-        if (updatedChains.getName() != null) {
-            existingChains.setName(updatedChains.getName());
-        }
-
-        if (updatedChains.getDescription() != null) {
-            existingChains.setDescription(updatedChains.getDescription());
-        }
-
-        if (updatedChains.getNodes() != null) {
-            for (Nodes updatedNode : updatedChains.getNodes()) {
-                if (updatedNode.getId() == null) {
-                    updatedNode.setSupplyChain(existingChains);
-                    if (updatedNode.getAssignedUser() != null) {
-                        Users user = userRepository.findById(updatedNode.getAssignedUser().getId())
-                                .orElseThrow(() -> new RuntimeException("User not found"));
-                        updatedNode.setAssignedUser(user);
-                    }
-                    // Force default status for new nodes
-                    updatedNode.setStatus("pending");
-                    nodeRepository.save(updatedNode);
-                } else {
-                    Nodes existingNode = nodeRepository.findById(updatedNode.getId())
-                            .orElseThrow(() -> new RuntimeException("Node not found"));
-                    existingNode.setName(updatedNode.getName());
-                    existingNode.setRole(updatedNode.getRole());
-                    existingNode.setX(updatedNode.getX());
-                    existingNode.setY(updatedNode.getY());
-                    if (updatedNode.getAssignedUser() != null) {
-                        Users user = userRepository.findById(updatedNode.getAssignedUser().getId())
-                                .orElseThrow(() -> new RuntimeException("User not found"));
-                        existingNode.setAssignedUser(user);
-                    } else {
-                        existingNode.setAssignedUser(null);
-                    }
-                    nodeRepository.save(existingNode);
-                }
-            }
-        }
-
-        if (updatedChains.getEdges() != null) {
-            for (Edges updatedEdge : updatedChains.getEdges()) {
-                Nodes sourceNode = nodeRepository.findById(updatedEdge.getSource().getId())
-                        .orElseThrow(() -> new RuntimeException("Source Node not found"));
-
-                Nodes targetNode = nodeRepository.findById(updatedEdge.getTarget().getId())
-                        .orElseThrow(() -> new RuntimeException("Target Node not found"));
-
-                if (updatedEdge.getId() == null) {
-                    updatedEdge.setSupplyChain(existingChains);
-                    updatedEdge.setSource(sourceNode);
-                    updatedEdge.setTarget(targetNode);
-                    edgeRepository.save(updatedEdge);
-                } else {
-                    Edges existingEdge = edgeRepository.findById(updatedEdge.getId())
-                            .orElseThrow(() -> new RuntimeException("Edge not found"));
-
-                    existingEdge.setSource(sourceNode);
-                    existingEdge.setTarget(targetNode);
-                    existingEdge.setAnimated(updatedEdge.getAnimated());
-                    existingEdge.setStrokeColor(updatedEdge.getStrokeColor());
-                    existingEdge.setStrokeWidth(updatedEdge.getStrokeWidth());
-
-                    edgeRepository.save(existingEdge);
-                }
-            }
-        }
-
-        existingChains.setUpdatedAt(new Date());
-        return chainRepository.save(existingChains);
     }
 
     /**

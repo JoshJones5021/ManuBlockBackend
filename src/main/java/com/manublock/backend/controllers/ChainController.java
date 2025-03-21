@@ -80,30 +80,6 @@ public class ChainController {
         return chainService.getAllSupplyChains();
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<?> updateSupplyChain(@PathVariable Long id, @RequestBody Chains updatedChains) {
-        try {
-            // First check if supply chain is finalized
-            boolean isFinalized = finalizationService.isSupplyChainFinalized(id);
-            if (isFinalized) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body("Cannot update a finalized supply chain");
-            }
-
-            // Then check blockchain status - don't allow updates for failed chains
-            Chains existingChain = chainService.getSupplyChainById(id);
-            if ("FAILED".equals(existingChain.getBlockchainStatus())) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(Map.of("error", "Cannot update a supply chain with failed blockchain status. Please retry creation first."));
-            }
-
-            return ResponseEntity.ok(chainService.updateSupplyChain(id, updatedChains));
-        } catch (Exception e) {
-            e.printStackTrace(); // Print full stack trace in logs
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error updating supply chain: " + e.getMessage());
-        }
-    }
-
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteSupplyChain(@PathVariable Long id) {
         try {
@@ -202,30 +178,6 @@ public class ChainController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to get assigned users: " + e.getMessage()));
-        }
-    }
-
-    @PostMapping("/{id}/retry-blockchain")
-    public ResponseEntity<?> retryBlockchainRegistration(@PathVariable Long id) {
-        try {
-            // Only allow retry for chains with FAILED status
-            Chains chain = chainService.getSupplyChainById(id);
-            if (!"FAILED".equals(chain.getBlockchainStatus())) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(Map.of("error", "Can only retry blockchain creation for chains with FAILED status"));
-            }
-
-            boolean success = chainService.retryBlockchainRegistration(id);
-
-            if (success) {
-                return ResponseEntity.ok(Map.of("message", "Blockchain registration retry initiated"));
-            } else {
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body(Map.of("error", "Failed to retry blockchain registration"));
-            }
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error during blockchain retry: " + e.getMessage()));
         }
     }
 }

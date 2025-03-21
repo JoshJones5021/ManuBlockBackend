@@ -76,24 +76,6 @@ public class ItemTracingController {
         }
     }
 
-    @GetMapping("/blockchain/item/{itemId}/parents")
-    public ResponseEntity<?> getBlockchainItemParents(@PathVariable Long itemId) {
-        try {
-            SmartContract contract = blockchainService.getContract();
-            List<BigInteger> parentIds = contract.getItemParents(BigInteger.valueOf(itemId)).send();
-
-            List<Long> response = new ArrayList<>();
-            for (BigInteger parentId : parentIds) {
-                response.add(parentId.longValue());
-            }
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error retrieving blockchain item parents: " + e.getMessage());
-        }
-    }
-
     @GetMapping("/blockchain/item/{itemId}/children")
     public ResponseEntity<?> getBlockchainItemChildren(@PathVariable Long itemId) {
         try {

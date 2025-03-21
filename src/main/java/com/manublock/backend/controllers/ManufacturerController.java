@@ -7,7 +7,6 @@ import com.manublock.backend.services.ManufacturerService;
 import com.manublock.backend.utils.CustomException;
 import com.manublock.backend.utils.DTOConverter;
 import jakarta.persistence.EntityNotFoundException;
-import org.hibernate.cache.spi.support.AbstractReadWriteAccess;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -258,17 +257,6 @@ public class ManufacturerController {
         }
     }
 
-    @GetMapping("/products/active/{manufacturerId}")
-    public ResponseEntity<?> getActiveProductsByManufacturer(@PathVariable Long manufacturerId) {
-        try {
-            List<Product> products = manufacturerService.getActiveProductsByManufacturer(manufacturerId);
-            return ResponseEntity.ok(products);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error retrieving active products: " + e.getMessage());
-        }
-    }
-
     @GetMapping("/materials/requests/{manufacturerId}")
     public ResponseEntity<?> getRequestsByManufacturer(@PathVariable Long manufacturerId) {
         try {
@@ -318,19 +306,6 @@ public class ManufacturerController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving orders: " + e.getMessage());
-        }
-    }
-
-    @PostMapping("/orders/{orderId}/start-production")
-    public ResponseEntity<?> startOrderProduction(@PathVariable Long orderId) {
-        try {
-            Order order = manufacturerService.startOrderProduction(orderId);
-            // Convert to DTO to prevent circular references
-            OrderResponseDTO orderDTO = DTOConverter.convertToOrderDTO(order);
-            return ResponseEntity.ok(orderDTO);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error starting production: " + e.getMessage());
         }
     }
 

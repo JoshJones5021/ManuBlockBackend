@@ -1,11 +1,9 @@
 package com.manublock.backend.controllers;
 
 import com.manublock.backend.dto.MaterialDTO;
-import com.manublock.backend.dto.ProductDTO;
 import com.manublock.backend.dto.TransportDTO;
 import com.manublock.backend.models.Items;
 import com.manublock.backend.models.Material;
-import com.manublock.backend.models.Product;
 import com.manublock.backend.models.Transport;
 import com.manublock.backend.services.RecyclingService;
 import org.springframework.beans.factory.annotation.Autowired;

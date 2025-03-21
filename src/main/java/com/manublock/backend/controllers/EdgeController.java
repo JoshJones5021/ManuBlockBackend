@@ -78,34 +78,6 @@ public class EdgeController {
         }
     }
 
-    @PutMapping("/{edgeId}")
-    public ResponseEntity<?> updateEdge(
-            @PathVariable Long supplyChainId,
-            @PathVariable Long edgeId,
-            @RequestBody Edges updatedEdge
-    ) {
-        try {
-            // Check if chain is finalized
-            if (finalizationService.isSupplyChainFinalized(supplyChainId)) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(Map.of("error", "Cannot update connections in a finalized supply chain"));
-            }
-
-            // Check for circular reference
-            if (updatedEdge.getSource() != null && updatedEdge.getTarget() != null &&
-                    updatedEdge.getSource().getId().equals(updatedEdge.getTarget().getId())) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(Map.of("error", "Cannot create a connection from a node to itself"));
-            }
-
-            Edges edge = edgeService.updateEdge(edgeId, updatedEdge);
-            return ResponseEntity.ok(edge);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Failed to update connection: " + e.getMessage()));
-        }
-    }
-
     @DeleteMapping("/{edgeId}")
     public ResponseEntity<?> deleteEdge(@PathVariable Long supplyChainId, @PathVariable Long edgeId) {
         try {

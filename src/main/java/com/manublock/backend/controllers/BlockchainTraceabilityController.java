@@ -7,11 +7,12 @@ import com.manublock.backend.repositories.ItemRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -26,31 +27,6 @@ public class BlockchainTraceabilityController {
 
     @Autowired
     private ItemRepository itemRepository;
-
-    /**
-     * Get blockchain transactions filtered by supply chain ID
-     */
-    @GetMapping("/transactions/supply-chain/{supplyChainId}")
-    public ResponseEntity<?> getTransactionsBySupplyChain(@PathVariable Long supplyChainId) {
-        try {
-            List<BlockchainTransaction> transactions = transactionRepository.findAll();
-
-            // Filter transactions related to this supply chain
-            List<BlockchainTransaction> filteredTransactions = transactions.stream()
-                    .filter(tx -> isTransactionRelatedToSupplyChain(tx, supplyChainId))
-                    .collect(Collectors.toList());
-
-            // Convert to response DTOs with enhanced information
-            List<Map<String, Object>> responseDtos = filteredTransactions.stream()
-                    .map(tx -> enrichTransactionData(tx))
-                    .collect(Collectors.toList());
-
-            return ResponseEntity.ok(responseDtos);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error retrieving blockchain transactions: " + e.getMessage()));
-        }
-    }
 
     /**
      * Get transaction timeline for a specific item
@@ -117,41 +93,6 @@ public class BlockchainTraceabilityController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error retrieving item timeline: " + e.getMessage()));
         }
-    }
-
-    /**
-     * Check if a transaction is related to a specific supply chain
-     */
-    private boolean isTransactionRelatedToSupplyChain(BlockchainTransaction tx, Long supplyChainId) {
-        // Check parameters string first
-        if (tx.getParameters() != null) {
-            String params = tx.getParameters();
-            String supplyChainIdStr = supplyChainId.toString();
-
-            // Different patterns based on function type
-            if (tx.getFunction().equals("createSupplyChain")) {
-                // For createSupplyChain, the first parameter is typically the supplyChainId
-                return params.startsWith(supplyChainIdStr + ",") || params.equals(supplyChainIdStr);
-            } else if (tx.getFunction().equals("authorizeParticipant")) {
-                // For authorizeParticipant, the format is usually "supplyChainId,userId"
-                return params.startsWith(supplyChainIdStr + ",");
-            } else {
-                // For other functions, check for the supplyChainId in the parameters
-                // The format is often "param1,param2,supplyChainId,..." or similar
-                String[] paramParts = params.split(",");
-                for (String part : paramParts) {
-                    if (part.trim().equals(supplyChainIdStr)) {
-                        return true;
-                    }
-                }
-
-                // Also check for direct mentions
-                return params.contains("supplyChainId=" + supplyChainIdStr) ||
-                        params.contains("\"supplyChainId\":" + supplyChainIdStr);
-            }
-        }
-
-        return false;
     }
 
     /**

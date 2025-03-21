@@ -7,7 +7,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.Date;
 import java.util.List;
-import java.util.Optional;
 import java.util.Random;
 
 @Service
@@ -82,43 +81,6 @@ public class SupplierService {
         );
 
         return savedMaterial;
-    }
-
-    public Material getMaterialById(Long materialId) {
-        return materialRepository.findById(materialId)
-                .orElseThrow(() -> new RuntimeException("Material not found"));
-    }
-
-    /**
-     * Update material details (only mutable properties)
-     */
-    public Material updateMaterial(Long materialId, String name, String description,
-                                   String specifications, String unit) {
-
-        Material material = materialRepository.findById(materialId)
-                .orElseThrow(() -> new RuntimeException("Material not found"));
-
-        // Update only database properties, not blockchain properties
-        material.setName(name);
-        material.setDescription(description);
-        material.setSpecifications(specifications);
-        material.setUnit(unit);
-        material.setUpdatedAt(new Date());
-
-        return materialRepository.save(material);
-    }
-
-    /**
-     * Logically delete a material (mark as inactive)
-     */
-    public Material deactivateMaterial(Long materialId) {
-        Material material = materialRepository.findById(materialId)
-                .orElseThrow(() -> new RuntimeException("Material not found"));
-
-        material.setActive(false);
-        material.setUpdatedAt(new Date());
-
-        return materialRepository.save(material);
     }
 
     /**

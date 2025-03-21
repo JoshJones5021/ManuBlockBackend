@@ -1,7 +1,6 @@
 package com.manublock.backend.models;
 
 import jakarta.persistence.*;
-
 import java.math.BigDecimal;
 
 @Entity

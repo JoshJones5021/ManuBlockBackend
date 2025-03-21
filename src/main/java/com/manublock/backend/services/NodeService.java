@@ -4,9 +4,9 @@ import com.manublock.backend.models.Chains;
 import com.manublock.backend.models.Edges;
 import com.manublock.backend.models.Nodes;
 import com.manublock.backend.models.Users;
+import com.manublock.backend.repositories.ChainRepository;
 import com.manublock.backend.repositories.EdgeRepository;
 import com.manublock.backend.repositories.NodeRepository;
-import com.manublock.backend.repositories.ChainRepository;
 import com.manublock.backend.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -132,36 +132,5 @@ public class NodeService {
 
         // Now delete the node
         nodeRepository.delete(node);
-    }
-
-    /**
-     * Get nodes by role in a supply chain
-     */
-    public List<Nodes> getNodesByRole(Long supplyChainId, String role) {
-        return nodeRepository.findBySupplyChain_IdAndRole(supplyChainId, role);
-    }
-
-    /**
-     * Check if a user is assigned to a specific role in a supply chain
-     */
-    public boolean isUserAssignedToRole(Long supplyChainId, Long userId, String role) {
-        List<Nodes> nodes = nodeRepository.findBySupplyChain_IdAndRole(supplyChainId, role);
-        return nodes.stream().anyMatch(node ->
-                node.getAssignedUser() != null &&
-                        node.getAssignedUser().getId().equals(userId));
-    }
-
-    /**
-     * Get all nodes assigned to a specific user
-     */
-    public List<Nodes> getNodesByUser(Long userId) {
-        return nodeRepository.findByAssignedUser_Id(userId);
-    }
-
-    /**
-     * Get all nodes in a supply chain assigned to a specific user
-     */
-    public List<Nodes> getNodesBySupplyChainAndUser(Long supplyChainId, Long userId) {
-        return nodeRepository.findBySupplyChain_IdAndAssignedUser_Id(supplyChainId, userId);
     }
 }

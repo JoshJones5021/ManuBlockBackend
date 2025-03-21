@@ -1,20 +1,20 @@
 package com.manublock.backend.controllers;
 
-import com.manublock.backend.dto.UserResponseDTO;
-import com.manublock.backend.models.Roles;
-import com.manublock.backend.models.Users;
-import com.manublock.backend.services.UserService;
-import com.manublock.backend.utils.JwtUtil;
 import com.manublock.backend.dto.AuthResponseDTO;
 import com.manublock.backend.dto.LoginRequestDTO;
 import com.manublock.backend.dto.RegisterUserRequestDTO;
+import com.manublock.backend.dto.UserResponseDTO;
+import com.manublock.backend.models.Roles;
+import com.manublock.backend.models.Users;
+import com.manublock.backend.repositories.UserRepository;
+import com.manublock.backend.services.UserService;
+import com.manublock.backend.utils.JwtUtil;
 import jakarta.transaction.Transactional;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
-import jakarta.validation.Valid;
-import com.manublock.backend.repositories.UserRepository;
 
 import java.util.List;
 import java.util.Map;
@@ -80,13 +80,6 @@ public class UserController {
         Roles userRole = Roles.valueOf(role.toUpperCase());
         Users updatedUser = userService.assignRole(id, userRole);
         return ResponseEntity.ok(updatedUser);
-    }
-
-    @GetMapping("/dashboard")
-    public ResponseEntity<String> dashboard() {
-        return ResponseEntity.ok()
-                .header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-                .body("Dashboard content");
     }
 
     @GetMapping(value = {"/", ""})

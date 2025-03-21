@@ -51,28 +51,6 @@ public class DistributorController {
         }
     }
 
-    @PostMapping("/transport/product")
-    public ResponseEntity<?> createProductTransport(@RequestBody Map<String, Object> payload) {
-        try {
-            Long distributorId = Long.valueOf(payload.get("distributorId").toString());
-            Long orderId = Long.valueOf(payload.get("orderId").toString());
-
-            Date scheduledPickupDate = payload.get("scheduledPickupDate") != null ?
-                    new Date(Long.parseLong(payload.get("scheduledPickupDate").toString())) : null;
-
-            Date scheduledDeliveryDate = payload.get("scheduledDeliveryDate") != null ?
-                    new Date(Long.parseLong(payload.get("scheduledDeliveryDate").toString())) : null;
-
-            Transport transport = distributorService.createProductTransport(
-                    distributorId, orderId, scheduledPickupDate, scheduledDeliveryDate);
-
-            return ResponseEntity.ok(transport);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error creating product transport: " + e.getMessage());
-        }
-    }
-
     @PostMapping("/transport/{transportId}/pickup")
     public ResponseEntity<?> recordPickup(@PathVariable Long transportId) {
         try {
@@ -109,43 +87,6 @@ public class DistributorController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving transports: " + e.getMessage());
-        }
-    }
-
-    @GetMapping("/transports/{distributorId}/status/{status}")
-    public ResponseEntity<?> getTransportsByStatus(
-            @PathVariable Long distributorId,
-            @PathVariable String status) {
-        try {
-            List<Transport> transports = distributorService.getTransportsByDistributorAndStatus(distributorId, status);
-            return ResponseEntity.ok(transports);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error retrieving transports by status: " + e.getMessage());
-        }
-    }
-
-    @GetMapping("/transports/{distributorId}/type/{type}")
-    public ResponseEntity<?> getTransportsByType(
-            @PathVariable Long distributorId,
-            @PathVariable String type) {
-        try {
-            List<Transport> transports = distributorService.getTransportsByType(distributorId, type);
-            return ResponseEntity.ok(transports);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error retrieving transports by type: " + e.getMessage());
-        }
-    }
-
-    @GetMapping("/transports/source/{sourceId}")
-    public ResponseEntity<?> getTransportsBySource(@PathVariable Long sourceId) {
-        try {
-            List<Transport> transports = distributorService.getTransportsBySource(sourceId);
-            return ResponseEntity.ok(transports);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error retrieving transports by source: " + e.getMessage());
         }
     }
 

@@ -1,6 +1,5 @@
 package com.manublock.backend.controllers;
 
-import com.manublock.backend.dto.NodeResponseDTO;
 import com.manublock.backend.models.Nodes;
 import com.manublock.backend.models.Users;
 import com.manublock.backend.services.NodeService;
@@ -84,20 +83,6 @@ public class NodeController {
         return ResponseEntity.ok(nodes);
     }
 
-    @GetMapping("/{nodeId}")
-    public ResponseEntity<?> getNodeById(
-            @PathVariable Long supplyChainId,
-            @PathVariable Long nodeId
-    ) {
-        try {
-            Nodes node = nodeService.getNodeById(nodeId);
-            return ResponseEntity.ok(new NodeResponseDTO(node));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "Node not found: " + e.getMessage()));
-        }
-    }
-
     @PutMapping("/{nodeId}")
     public ResponseEntity<?> updateNode(
             @PathVariable Long supplyChainId,
@@ -158,17 +143,6 @@ public class NodeController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to delete node: " + e.getMessage()));
-        }
-    }
-
-    @GetMapping("/by-role/{role}")
-    public ResponseEntity<?> getNodesByRole(@PathVariable Long supplyChainId, @PathVariable String role) {
-        try {
-            List<Nodes> nodes = nodeService.getNodesByRole(supplyChainId, role);
-            return ResponseEntity.ok(nodes);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Failed to get nodes by role: " + e.getMessage()));
         }
     }
 }

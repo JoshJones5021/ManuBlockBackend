@@ -3,8 +3,8 @@ package com.manublock.backend.services;
 import com.manublock.backend.models.Chains;
 import com.manublock.backend.models.Edges;
 import com.manublock.backend.models.Nodes;
-import com.manublock.backend.repositories.EdgeRepository;
 import com.manublock.backend.repositories.ChainRepository;
+import com.manublock.backend.repositories.EdgeRepository;
 import com.manublock.backend.repositories.NodeRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -62,38 +62,6 @@ public class EdgeService {
     public Edges getEdgeById(Long edgeId) {
         return edgeRepository.findById(edgeId)
                 .orElseThrow(() -> new RuntimeException("Edge not found"));
-    }
-
-    @Transactional
-    public Edges updateEdge(Long edgeId, Edges updatedEdge) {
-        Edges existingEdge = edgeRepository.findById(edgeId)
-                .orElseThrow(() -> new RuntimeException("Edge not found"));
-
-        if (updatedEdge.getSource() != null) {
-            Nodes sourceNode = nodeRepository.findById(updatedEdge.getSource().getId())
-                    .orElseThrow(() -> new RuntimeException("Source Node not found"));
-            existingEdge.setSource(sourceNode);
-        }
-
-        if (updatedEdge.getTarget() != null) {
-            Nodes targetNode = nodeRepository.findById(updatedEdge.getTarget().getId())
-                    .orElseThrow(() -> new RuntimeException("Target Node not found"));
-            existingEdge.setTarget(targetNode);
-        }
-
-        if (updatedEdge.getAnimated() != null) {
-            existingEdge.setAnimated(updatedEdge.getAnimated());
-        }
-
-        if (updatedEdge.getStrokeColor() != null) {
-            existingEdge.setStrokeColor(updatedEdge.getStrokeColor());
-        }
-
-        if (updatedEdge.getStrokeWidth() != null) {
-            existingEdge.setStrokeWidth(updatedEdge.getStrokeWidth());
-        }
-
-        return edgeRepository.save(existingEdge);
     }
 
     public void deleteEdge(Long edgeId) {

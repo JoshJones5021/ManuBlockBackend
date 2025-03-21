@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 @Service
 public class CustomerService {
@@ -30,9 +29,6 @@ public class CustomerService {
 
     @Autowired
     private ItemRepository itemRepository;
-
-    @Autowired
-    private ItemService itemService;
 
     @Autowired
     private ExtendedBlockchainService blockchainService;
@@ -216,14 +212,9 @@ public class CustomerService {
         return orderRepository.save(order);
     }
 
-    // GET methods
 
     public List<Order> getOrdersByCustomer(Long customerId) {
         return orderRepository.findByCustomer_Id(customerId);
-    }
-
-    public List<Order> getOrdersByCustomerAndStatus(Long customerId, String status) {
-        return orderRepository.findByCustomer_IdAndStatus(customerId, status);
     }
 
     public Order getOrderByNumber(String orderNumber) {
@@ -234,7 +225,6 @@ public class CustomerService {
         return productRepository.findByActiveTrue();
     }
 
-    // Helper class
 
     public static class OrderItemDTO {
         private Long productId;

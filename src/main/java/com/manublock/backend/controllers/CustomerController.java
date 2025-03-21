@@ -113,23 +113,6 @@ public class CustomerController {
         }
     }
 
-    @GetMapping("/orders/{customerId}/status/{status}")
-    public ResponseEntity<?> getOrdersByStatus(
-            @PathVariable Long customerId,
-            @PathVariable String status) {
-        try {
-            List<Order> orders = customerService.getOrdersByCustomerAndStatus(customerId, status);
-            // Convert to DTOs to avoid circular references
-            List<OrderResponseDTO> orderDTOs = orders.stream()
-                    .map(DTOConverter::convertToOrderDTO)
-                    .collect(Collectors.toList());
-            return ResponseEntity.ok(orderDTOs);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error retrieving orders by status: " + e.getMessage());
-        }
-    }
-
     @GetMapping("/orders/number/{orderNumber}")
     public ResponseEntity<?> getOrderByNumber(@PathVariable String orderNumber) {
         try {

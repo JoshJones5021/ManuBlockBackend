@@ -4,9 +4,8 @@ import com.manublock.backend.models.Chains;
 import com.manublock.backend.models.Nodes;
 import com.manublock.backend.models.Users;
 import com.manublock.backend.repositories.ChainRepository;
-import com.manublock.backend.repositories.NodeRepository;
-import com.manublock.backend.repositories.UserRepository;
 import com.manublock.backend.repositories.EdgeRepository;
+import com.manublock.backend.repositories.NodeRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,9 +29,6 @@ public class SupplyChainFinalizationService {
 
     @Autowired
     private EdgeRepository edgeRepository;
-
-    @Autowired
-    private UserRepository userRepository;
 
     @Autowired
     private AdminBlockchainService adminBlockchainService;
@@ -114,15 +110,6 @@ public class SupplyChainFinalizationService {
         return allNodeIds.stream()
                 .filter(id -> !connectedNodeIds.contains(id))
                 .collect(Collectors.toList());
-    }
-
-    /**
-     * Check if the current user is assigned to any node in the supply chain
-     */
-    public boolean isUserAssignedToChain(Long supplyChainId, Long userId) {
-        // Find all nodes in the supply chain that have this user assigned
-        List<Nodes> assignedNodes = nodeRepository.findBySupplyChain_IdAndAssignedUser_Id(supplyChainId, userId);
-        return !assignedNodes.isEmpty();
     }
 
     /**

@@ -1,7 +1,6 @@
 package com.manublock.backend.dto;
 
 import com.manublock.backend.models.MaterialRequest;
-import com.manublock.backend.models.MaterialRequestItem;
 
 import java.util.Date;
 import java.util.List;
