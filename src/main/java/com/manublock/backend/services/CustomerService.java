@@ -115,6 +115,44 @@ public class CustomerService {
             String blockchainTxHash = blockchainTx.get(); // Blocking for now, or handle asynchronously
             savedOrder.setBlockchainTxHash(blockchainTxHash);
 
+            // Create blockchain items for each order item
+            for (OrderItem orderItem : orderItems) {
+                try {
+                    // Create an item on the blockchain for each order item
+                    CompletableFuture<Long> blockchainItemFuture = blockchainService.createItemOnBlockchain(
+                            savedOrder.getId(),
+                            supplyChain.getId(),
+                            customer.getId(),
+                            orderItem.getProduct().getId(),
+                            orderItem.getQuantity()
+                    );
+
+                    // Get the blockchain item ID and set it on the order item
+                    Long blockchainItemId = blockchainItemFuture.get();
+                    orderItem.setBlockchainItemId(blockchainItemId);
+                    orderItemRepository.save(orderItem);
+
+                    // Create an entry in the Items table to track this blockchain item
+                    Items blockchainItem = new Items();
+                    blockchainItem.setId(blockchainItemId);
+                    blockchainItem.setName("Order " + savedOrder.getOrderNumber() + " - " + orderItem.getProduct().getName());
+                    blockchainItem.setItemType("product");
+                    blockchainItem.setQuantity(orderItem.getQuantity());
+                    blockchainItem.setOwner(customer);  // Set owner to customer
+                    blockchainItem.setSupplyChain(supplyChain);  // Set supply chain
+                    blockchainItem.setStatus("REQUESTED");
+                    blockchainItem.setParentItemIds(new ArrayList<>()); // No parents for new items
+                    blockchainItem.setBlockchainTxHash(blockchainTxHash);
+                    blockchainItem.setBlockchainStatus("CREATED");
+                    blockchainItem.setCreatedAt(new Date());
+                    blockchainItem.setUpdatedAt(new Date());
+                    itemRepository.save(blockchainItem);
+                } catch (Exception e) {
+                    System.err.println("Failed to create blockchain item for order item: " + e.getMessage());
+                    // Decide whether to fail the entire transaction or continue with partial success
+                }
+            }
+
         } catch (Exception e) {
             System.err.println("Blockchain order creation failed: " + e.getMessage());
             // Optional: handle retry or mark order as 'Pending Blockchain'
@@ -149,6 +187,27 @@ public class CustomerService {
         for (OrderItem item : order.getItems()) {
             item.setStatus("Cancelled");
             orderItemRepository.save(item);
+
+            // If item has a blockchain ID, update its status on the blockchain
+            if (item.getBlockchainItemId() != null) {
+                try {
+                    // 4 typically represents REJECTED/CANCELLED status in your blockchain
+                    blockchainService.updateItemStatus(
+                            item.getBlockchainItemId(),
+                            4,  // Status code for CANCELLED/REJECTED
+                            order.getCustomer().getId()
+                    ).thenAccept(txHash -> {
+                        // Log the successful transaction
+                        System.out.println("Order item cancelled on blockchain with hash: " + txHash);
+                    }).exceptionally(ex -> {
+                        // Log the error
+                        System.err.println("Failed to cancel order item on blockchain: " + ex.getMessage());
+                        return null;
+                    });
+                } catch (Exception e) {
+                    System.err.println("Error updating blockchain status for cancelled item: " + e.getMessage());
+                }
+            }
         }
 
         return orderRepository.save(order);

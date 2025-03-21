@@ -86,7 +86,7 @@ public class BlockchainService {
 
     /**
      * Creates a supply chain on blockchain with the admin's wallet
-     * Updated to include creator's user ID
+     * Updated to include creator's user ID and better detect ID conflicts
      */
     synchronized public CompletableFuture<String> createSupplyChain(Long supplyChainId, Long creatorUserId) {
         System.out.println("📋 Starting createSupplyChain for ID: " + supplyChainId + " by user: " + creatorUserId);
@@ -183,11 +183,35 @@ public class BlockchainService {
                     return txHash;
                 })
                 .exceptionally(ex -> {
-                    System.out.println("❌ Transaction failed: " + ex.getMessage());
-                    tx.setStatus("FAILED");
-                    tx.setFailureReason(ex.getMessage());
-                    transactionRepository.save(tx);
-                    throw new RuntimeException("Transaction failed: " + ex.getMessage(), ex);
+                    // Improve error detection for ID conflicts
+                    String errorMsg = ex.getMessage();
+
+                    // Detect ID conflicts better
+                    if (errorMsg != null &&
+                            (errorMsg.contains("already exists") ||
+                                    errorMsg.contains("duplicate") ||
+                                    errorMsg.contains("revert") ||
+                                    errorMsg.contains("exists") ||
+                                    errorMsg.contains("invalid opcode"))) {
+
+                        // This is likely an ID conflict - transform the error
+                        System.out.println("❌ Likely ID conflict detected: " + errorMsg);
+                        tx.setStatus("FAILED");
+                        tx.setFailureReason("ID conflict: Supply chain ID " + supplyChainId + " already exists");
+                        transactionRepository.save(tx);
+
+                        CompletableFuture<String> future = new CompletableFuture<>();
+                        future.completeExceptionally(
+                                new RuntimeException("ID conflict: Supply chain ID " + supplyChainId + " already exists"));
+                        throw new RuntimeException("ID conflict: Supply chain ID " + supplyChainId + " already exists");
+                    } else {
+                        // Other type of error
+                        System.out.println("❌ Transaction failed: " + errorMsg);
+                        tx.setStatus("FAILED");
+                        tx.setFailureReason(errorMsg);
+                        transactionRepository.save(tx);
+                        throw new RuntimeException("Transaction failed: " + errorMsg);
+                    }
                 });
     }
 
@@ -258,6 +282,25 @@ public class BlockchainService {
                 return txHash;
             } else {
                 System.out.println("⚠️ Transaction attempt failed: " + (ex != null ? ex.getMessage() : "No receipt returned"));
+
+                // Check for ID conflict specifically
+                if (ex != null && ex.getMessage() != null &&
+                        (ex.getMessage().contains("already exists") ||
+                                ex.getMessage().contains("duplicate") ||
+                                ex.getMessage().contains("revert") ||
+                                ex.getMessage().contains("exists") ||
+                                ex.getMessage().contains("invalid opcode"))) {
+
+                    // This is likely an ID conflict
+                    System.out.println("⚠️ ID conflict detected in transaction");
+                    tx.setStatus("FAILED");
+                    tx.setFailureReason("ID conflict detected: " + ex.getMessage());
+                    tx.setRetryCount(retryCount);
+                    transactionRepository.save(tx);
+
+                    // Complete with exception for ID conflict
+                    throw new RuntimeException("ID conflict: " + ex.getMessage());
+                }
 
                 // Only check blockchain if we already have a transaction hash
                 if (tx.getTransactionHash() != null && !tx.getTransactionHash().isEmpty()) {

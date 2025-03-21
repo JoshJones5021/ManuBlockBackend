@@ -1,13 +1,11 @@
 package com.manublock.backend.services;
 
-import com.manublock.backend.models.BlockchainTransaction;
-import com.manublock.backend.models.Chains;
-import com.manublock.backend.models.Items;
-import com.manublock.backend.models.Users;
+import com.manublock.backend.models.*;
 import com.manublock.backend.repositories.BlockchainTransactionRepository;
 import com.manublock.backend.repositories.ChainRepository;
 import com.manublock.backend.repositories.ItemRepository;
 import com.manublock.backend.repositories.UserRepository;
+import com.manublock.backend.repositories.OrderItemRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.web3j.protocol.core.RemoteFunctionCall;
@@ -20,6 +18,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 /**
  * Extended blockchain service that provides higher-level operations
@@ -34,6 +33,7 @@ public class ExtendedBlockchainService {
     private final UserRepository userRepository;
     private final ChainRepository chainRepository;
     private final ItemRepository itemRepository;
+    private final OrderItemRepository orderItemRepository;
 
     @Autowired
     public ExtendedBlockchainService(
@@ -41,12 +41,14 @@ public class ExtendedBlockchainService {
             BlockchainTransactionRepository transactionRepository,
             UserRepository userRepository,
             ChainRepository chainRepository,
-            ItemRepository itemRepository) {
+            ItemRepository itemRepository,
+            OrderItemRepository orderItemRepository) {
         this.blockchainService = blockchainService;
         this.transactionRepository = transactionRepository;
         this.userRepository = userRepository;
         this.chainRepository = chainRepository;
         this.itemRepository = itemRepository;
+        this.orderItemRepository = orderItemRepository;
     }
 
     /**
@@ -410,5 +412,162 @@ public class ExtendedBlockchainService {
                     System.out.println("Order created on blockchain with txHash: " + txHash);
                     return txHash;
                 });
+    }
+
+    /**
+     * Create an item on the blockchain for a specific order item
+     *
+     * @param orderId The ID of the parent order
+     * @param supplyChainId The ID of the supply chain
+     * @param customerId The ID of the customer
+     * @param productId The ID of the product
+     * @param quantity The quantity ordered
+     * @return A CompletableFuture containing the blockchain item ID
+     */
+    public CompletableFuture<Long> createItemOnBlockchain(Long orderId, Long supplyChainId,
+                                                          Long customerId, Long productId,
+                                                          Long quantity) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                // Generate a unique item ID using a combination of order ID and product ID
+                // This ensures each item has a unique ID on the blockchain
+                BigInteger itemId = BigInteger.valueOf(orderId * 10000 + productId);
+
+                // Create a transaction record
+                BlockchainTransaction tx = new BlockchainTransaction();
+                tx.setFunction("createItem");
+                tx.setParameters(itemId + "," + supplyChainId + "," + quantity + ",product," + customerId);
+                tx.setStatus("PENDING");
+                tx.setCreatedAt(Instant.now());
+                tx.setRetryCount(0);
+                transactionRepository.save(tx);
+
+                // Convert parameters to BigInteger for the smart contract
+                BigInteger chainId = BigInteger.valueOf(supplyChainId);
+                BigInteger qty = BigInteger.valueOf(quantity);
+                BigInteger creatorId = BigInteger.valueOf(customerId);
+
+                // Set the item type for this product
+                String itemType = "product";
+
+                // Call the smart contract's createItem function
+                // Based on the contract: createItem(uint256 itemId, uint256 supplyChainId, uint256 quantity, string calldata itemType, uint256 creatorId)
+                RemoteFunctionCall<TransactionReceipt> functionCall =
+                        blockchainService.getContract().createItem(
+                                itemId,          // itemId
+                                chainId,         // supplyChainId
+                                qty,             // quantity
+                                itemType,        // itemType
+                                creatorId        // creatorId
+                        );
+
+                // Send the transaction
+                TransactionReceipt receipt = functionCall.send();
+                String txHash = receipt.getTransactionHash();
+
+                // Update transaction record
+                tx.setTransactionHash(txHash);
+                tx.setStatus("CONFIRMED");
+                tx.setConfirmedAt(Instant.now());
+                transactionRepository.save(tx);
+
+                // Log the successful transaction
+                System.out.println("Created blockchain item with ID: " + itemId +
+                        " for order: " + orderId +
+                        ", product: " + productId +
+                        ", tx hash: " + txHash);
+
+                // Return the blockchain item ID
+                return itemId.longValue();
+            } catch (Exception e) {
+                System.err.println("Error creating item on blockchain: " + e.getMessage());
+                throw new CompletionException(e);
+            }
+        });
+    }
+
+    /**
+     * Cancel an order on the blockchain by updating the status of associated items
+     *
+     * @param orderId The ID of the order being cancelled
+     * @param supplyChainId The ID of the supply chain
+     * @param customerId The ID of the customer cancelling the order
+     * @return A CompletableFuture containing the transaction hash
+     */
+    public CompletableFuture<String> cancelOrderOnBlockchain(Long orderId, Long supplyChainId, Long customerId) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                // Get all order items with blockchain IDs for this order from the repository
+                List<OrderItem> orderItems = orderItemRepository.findByOrder_Id(orderId);
+
+                // Status code for REJECTED/CANCELLED in the contract enum
+                Integer rejectedStatus = 4; // ItemStatus.REJECTED = 4
+
+                String lastTxHash = null;
+
+                // Update each item's status on the blockchain
+                for (OrderItem item : orderItems) {
+                    if (item.getBlockchainItemId() != null) {
+                        try {
+                            // Create transaction record
+                            BlockchainTransaction tx = new BlockchainTransaction();
+                            tx.setFunction("updateItemStatus");
+                            tx.setParameters(item.getBlockchainItemId() + "," + rejectedStatus + "," + customerId);
+                            tx.setStatus("PENDING");
+                            tx.setCreatedAt(Instant.now());
+                            tx.setRetryCount(0);
+                            transactionRepository.save(tx);
+
+                            // Call the updateItemStatus method on the blockchain
+                            RemoteFunctionCall<TransactionReceipt> functionCall =
+                                    blockchainService.getContract().updateItemStatus(
+                                            BigInteger.valueOf(item.getBlockchainItemId()),  // itemId
+                                            BigInteger.valueOf(rejectedStatus),              // newStatus
+                                            BigInteger.valueOf(customerId)                   // ownerId
+                                    );
+
+                            // Send the transaction
+                            TransactionReceipt receipt = functionCall.send();
+                            lastTxHash = receipt.getTransactionHash();
+
+                            // Update transaction record
+                            tx.setTransactionHash(lastTxHash);
+                            tx.setStatus("CONFIRMED");
+                            tx.setConfirmedAt(Instant.now());
+                            transactionRepository.save(tx);
+
+                            System.out.println("Cancelled blockchain item " + item.getBlockchainItemId() +
+                                    " for order " + orderId +
+                                    ", tx hash: " + lastTxHash);
+
+                            // Update the Items record in the database
+                            try {
+                                Items blockchainItem = itemRepository.findById(item.getBlockchainItemId())
+                                        .orElse(null);
+
+                                if (blockchainItem != null) {
+                                    blockchainItem.setStatus("REJECTED");
+                                    blockchainItem.setBlockchainStatus("REJECTED");
+                                    blockchainItem.setBlockchainTxHash(lastTxHash);
+                                    blockchainItem.setUpdatedAt(new Date());
+                                    itemRepository.save(blockchainItem);
+                                }
+                            } catch (Exception e) {
+                                System.err.println("Error updating blockchain item in database: " + e.getMessage());
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Error cancelling item " + item.getBlockchainItemId() + ": " + e.getMessage());
+                            // Continue with other items even if one fails
+                        }
+                    }
+                }
+
+                // Return the last transaction hash (or null if no items were updated)
+                return lastTxHash;
+            } catch (Exception e) {
+                System.err.println("Error cancelling order on blockchain: " + e.getMessage());
+                throw new CompletionException(e);
+            }
+        });
     }
 }
