@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class CustomerService {
@@ -34,7 +35,7 @@ public class CustomerService {
     private ExtendedBlockchainService blockchainService;
 
     /**
-     * Create a new order
+     * Create a new order with improved blockchain error handling
      */
     public Order createOrder(Long customerId, Long supplyChainId,
                              List<OrderItemDTO> items,
@@ -97,28 +98,35 @@ public class CustomerService {
         // Update order with items
         savedOrder.setItems(orderItems);
 
-        // 🔗 Blockchain Transaction - Send total quantity
+        // 🔗 Blockchain Transaction - Send total quantity with improved error handling
         try {
             // Calculate total quantity
             Long totalQuantity = items.stream()
                     .mapToLong(OrderItemDTO::getQuantity)
                     .sum();
 
-            CompletableFuture<String> blockchainTx = blockchainService.createOrderOnBlockchain(
-                    savedOrder.getId(),        // Order ID
-                    supplyChain.getId(),       // Supply chain ID
-                    customer.getId(),          // Customer ID
-                    totalQuantity              // Total quantity
+            // Use a base orderId for blockchain (using timestamp to reduce chance of conflict)
+            Long blockchainId = System.currentTimeMillis();
+
+            CompletableFuture<String> blockchainTx = blockchainService.createItem(
+                    blockchainId,          // Use the unique id as a base
+                    supplyChain.getId(),   // Supply chain ID
+                    totalQuantity,         // Total quantity
+                    "ORDER",               // Type
+                    customer.getId()       // Customer ID
             );
 
-            // Optionally block or use async handling
-            String blockchainTxHash = blockchainTx.get(); // Blocking for now, or handle asynchronously
+            // Set a timeout for the blockchain operation
+            String blockchainTxHash = blockchainTx.get(60, TimeUnit.SECONDS); // 60 second timeout
             savedOrder.setBlockchainTxHash(blockchainTxHash);
+            savedOrder = orderRepository.save(savedOrder);
 
             // Create blockchain items for each order item
+            List<CompletableFuture<Long>> itemFutures = new ArrayList<>();
+
             for (OrderItem orderItem : orderItems) {
                 try {
-                    // Create an item on the blockchain for each order item
+                    // Create an item on the blockchain for each order item with the improved method
                     CompletableFuture<Long> blockchainItemFuture = blockchainService.createItemOnBlockchain(
                             savedOrder.getId(),
                             supplyChain.getId(),
@@ -127,39 +135,37 @@ public class CustomerService {
                             orderItem.getQuantity()
                     );
 
-                    // Get the blockchain item ID and set it on the order item
-                    Long blockchainItemId = blockchainItemFuture.get();
-                    orderItem.setBlockchainItemId(blockchainItemId);
-                    orderItemRepository.save(orderItem);
-
-                    // Create an entry in the Items table to track this blockchain item
-                    Items blockchainItem = new Items();
-                    blockchainItem.setId(blockchainItemId);
-                    blockchainItem.setName("Order " + savedOrder.getOrderNumber() + " - " + orderItem.getProduct().getName());
-                    blockchainItem.setItemType("product");
-                    blockchainItem.setQuantity(orderItem.getQuantity());
-                    blockchainItem.setOwner(customer);  // Set owner to customer
-                    blockchainItem.setSupplyChain(supplyChain);  // Set supply chain
-                    blockchainItem.setStatus("REQUESTED");
-                    blockchainItem.setParentItemIds(new ArrayList<>()); // No parents for new items
-                    blockchainItem.setBlockchainTxHash(blockchainTxHash);
-                    blockchainItem.setBlockchainStatus("CREATED");
-                    blockchainItem.setCreatedAt(new Date());
-                    blockchainItem.setUpdatedAt(new Date());
-                    itemRepository.save(blockchainItem);
+                    itemFutures.add(blockchainItemFuture);
                 } catch (Exception e) {
-                    System.err.println("Failed to create blockchain item for order item: " + e.getMessage());
-                    // Decide whether to fail the entire transaction or continue with partial success
+                    System.err.println("Error initiating blockchain item creation: " + e.getMessage());
+                    // Continue with other items even if one fails
                 }
+            }
+
+            // Wait for all futures to complete, with timeout
+            try {
+                CompletableFuture.allOf(itemFutures.toArray(new CompletableFuture[0]))
+                        .get(120, TimeUnit.SECONDS); // 2 minute timeout for all items
+
+                System.out.println("✅ All blockchain items created successfully for order: " + savedOrder.getId());
+            } catch (Exception e) {
+                System.err.println("⚠️ Some blockchain items may not have been created: " + e.getMessage());
+                // Order is still created, just with potentially missing blockchain items
             }
 
         } catch (Exception e) {
             System.err.println("Blockchain order creation failed: " + e.getMessage());
-            // Optional: handle retry or mark order as 'Pending Blockchain'
+
+            // Mark the order with a special status to indicate blockchain problem
+            savedOrder.setStatus("Requested (Pending Blockchain)");
+            savedOrder = orderRepository.save(savedOrder);
+
+            // We still return the order, but with an indication that there was a blockchain issue
+            System.err.println("Order created in database but blockchain registration failed: " + savedOrder.getId());
         }
 
-        // Final save with blockchain hash
-        return orderRepository.save(savedOrder);
+        // Return the saved order
+        return savedOrder;
     }
 
 
@@ -213,9 +219,6 @@ public class CustomerService {
         return orderRepository.save(order);
     }
 
-    /**
-     * Confirm order delivery
-     */
     /**
      * Confirm order delivery
      */
@@ -282,6 +285,60 @@ public class CustomerService {
 
     public List<Product> getAvailableProducts() {
         return productRepository.findByActiveTrue();
+    }
+
+    /**
+     * Generates a unique ID for blockchain items with optional namespace prefixing
+     * to separate different types of items (products, orders, materials, etc.)
+     *
+     * @param baseValue An optional base value to include in the ID (like order ID)
+     * @param namespace A numeric namespace (0-99) to prefix the ID with
+     * @return A unique long value suitable for blockchain item identification
+     */
+    public static Long generateUniqueBlockchainId(Long baseValue, int namespace) {
+        // Current time in milliseconds - provides basic uniqueness
+        long timestamp = System.currentTimeMillis();
+
+        // Random component to avoid collisions if multiple items created in same millisecond
+        int random = new Random().nextInt(1000);
+
+        // Ensure namespace is between 0-99
+        namespace = Math.min(Math.max(namespace, 0), 99);
+
+        // Format: NNBBBBBBTTTTTTRRR
+        // NN: 2-digit namespace
+        // BBBBBB: 6 most significant digits from base value (0 if null)
+        // TTTTTT: 6 least significant digits from timestamp
+        // RRR: 3-digit random value
+
+        // Calculate components
+        long baseComponent = (baseValue != null) ? (baseValue % 1_000_000) : 0;
+        long timeComponent = timestamp % 1_000_000;
+
+        // Combine all parts
+        return (long) namespace * 1_000_000_000_000L + // Namespace prefix (NN0000000000000)
+                baseComponent * 1_000_000L +            // Base value    (00BBBBBB000000)
+                timeComponent * 1_000L +                // Timestamp     (0000000TTTTTT000)
+                random;                                 // Random suffix (0000000000000RRR)
+    }
+
+    /**
+     * Simplified version that just uses current time and a random factor
+     */
+    public static Long generateUniqueBlockchainId() {
+        return generateUniqueBlockchainId(null, 0);
+    }
+
+    /**
+     * Specialized version for order items that factors in order ID and product ID
+     */
+    public static Long generateOrderItemBlockchainId(Long orderId, Long productId, int attempt) {
+        // Format the order and product IDs into a single base value
+        // with retry attempt as a factor to avoid conflicts
+        Long baseValue = orderId * 10_000L + productId + (attempt * 1_000_000L);
+
+        // Use namespace 1 for order items
+        return generateUniqueBlockchainId(baseValue, 1);
     }
 
 

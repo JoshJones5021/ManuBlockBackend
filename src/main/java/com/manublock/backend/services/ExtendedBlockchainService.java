@@ -1,11 +1,7 @@
 package com.manublock.backend.services;
 
 import com.manublock.backend.models.*;
-import com.manublock.backend.repositories.BlockchainTransactionRepository;
-import com.manublock.backend.repositories.ChainRepository;
-import com.manublock.backend.repositories.ItemRepository;
-import com.manublock.backend.repositories.UserRepository;
-import com.manublock.backend.repositories.OrderItemRepository;
+import com.manublock.backend.repositories.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.web3j.protocol.core.RemoteFunctionCall;
@@ -42,14 +38,19 @@ public class ExtendedBlockchainService {
             UserRepository userRepository,
             ChainRepository chainRepository,
             ItemRepository itemRepository,
-            OrderItemRepository orderItemRepository) {
+            OrderItemRepository orderItemRepository,
+            ProductRepository productRepository) {  // 🆕 Added ProductRepository
         this.blockchainService = blockchainService;
         this.transactionRepository = transactionRepository;
         this.userRepository = userRepository;
         this.chainRepository = chainRepository;
         this.itemRepository = itemRepository;
         this.orderItemRepository = orderItemRepository;
+        this.productRepository = productRepository;  // 🆕 Assign it to the field
     }
+
+    // 🆕 Add the field declaration at the class level
+    private final ProductRepository productRepository;
 
     /**
      * Authorizes a participant to interact with a supply chain
@@ -415,7 +416,7 @@ public class ExtendedBlockchainService {
     }
 
     /**
-     * Create an item on the blockchain for a specific order item
+     * Create an item on the blockchain for a specific order item with retry for ID conflicts
      *
      * @param orderId The ID of the parent order
      * @param supplyChainId The ID of the supply chain
@@ -429,58 +430,142 @@ public class ExtendedBlockchainService {
                                                           Long quantity) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                // Generate a unique item ID using a combination of order ID and product ID
-                // This ensures each item has a unique ID on the blockchain
-                BigInteger itemId = BigInteger.valueOf(orderId * 10000 + productId);
+                // Base blockchain ID generation - will be incremented on conflicts
+                Long baseItemId = orderId * 10000 + productId;
+                Long blockchainItemId = baseItemId;
 
-                // Create a transaction record
-                BlockchainTransaction tx = new BlockchainTransaction();
-                tx.setFunction("createItem");
-                tx.setParameters(itemId + "," + supplyChainId + "," + quantity + ",product," + customerId);
-                tx.setStatus("PENDING");
-                tx.setCreatedAt(Instant.now());
-                tx.setRetryCount(0);
-                transactionRepository.save(tx);
+                // Keep track of retry attempts
+                int retryCount = 0;
+                int maxRetries = 5;
+                boolean success = false;
+                String txHash = null;
 
-                // Convert parameters to BigInteger for the smart contract
-                BigInteger chainId = BigInteger.valueOf(supplyChainId);
-                BigInteger qty = BigInteger.valueOf(quantity);
-                BigInteger creatorId = BigInteger.valueOf(customerId);
+                while (!success && retryCount < maxRetries) {
+                    try {
+                        // Create a transaction record
+                        BlockchainTransaction tx = new BlockchainTransaction();
+                        tx.setFunction("createItem");
+                        tx.setParameters(blockchainItemId + "," + supplyChainId + "," + quantity + ",product," + customerId);
+                        tx.setStatus("PENDING");
+                        tx.setCreatedAt(Instant.now());
+                        tx.setRetryCount(retryCount);
+                        transactionRepository.save(tx);
 
-                // Set the item type for this product
-                String itemType = "product";
+                        // Convert parameters to BigInteger for the smart contract
+                        BigInteger itemId = BigInteger.valueOf(blockchainItemId);
+                        BigInteger chainId = BigInteger.valueOf(supplyChainId);
+                        BigInteger qty = BigInteger.valueOf(quantity);
+                        BigInteger creatorId = BigInteger.valueOf(customerId);
 
-                // Call the smart contract's createItem function
-                // Based on the contract: createItem(uint256 itemId, uint256 supplyChainId, uint256 quantity, string calldata itemType, uint256 creatorId)
-                RemoteFunctionCall<TransactionReceipt> functionCall =
-                        blockchainService.getContract().createItem(
-                                itemId,          // itemId
-                                chainId,         // supplyChainId
-                                qty,             // quantity
-                                itemType,        // itemType
-                                creatorId        // creatorId
-                        );
+                        // Set the item type for this product
+                        String itemType = "product";
 
-                // Send the transaction
-                TransactionReceipt receipt = functionCall.send();
-                String txHash = receipt.getTransactionHash();
+                        // Call the smart contract's createItem function
+                        RemoteFunctionCall<TransactionReceipt> functionCall =
+                                blockchainService.getContract().createItem(
+                                        itemId,          // itemId
+                                        chainId,         // supplyChainId
+                                        qty,             // quantity
+                                        itemType,        // itemType
+                                        creatorId        // creatorId
+                                );
 
-                // Update transaction record
-                tx.setTransactionHash(txHash);
-                tx.setStatus("CONFIRMED");
-                tx.setConfirmedAt(Instant.now());
-                transactionRepository.save(tx);
+                        // Send the transaction
+                        TransactionReceipt receipt = functionCall.send();
+                        txHash = receipt.getTransactionHash();
 
-                // Log the successful transaction
-                System.out.println("Created blockchain item with ID: " + itemId +
-                        " for order: " + orderId +
-                        ", product: " + productId +
-                        ", tx hash: " + txHash);
+                        // Update transaction record
+                        tx.setTransactionHash(txHash);
+                        tx.setStatus("CONFIRMED");
+                        tx.setConfirmedAt(Instant.now());
+                        transactionRepository.save(tx);
 
-                // Return the blockchain item ID
-                return itemId.longValue();
+                        // Log the successful transaction
+                        System.out.println("Created blockchain item with ID: " + blockchainItemId +
+                                " for order: " + orderId +
+                                ", product: " + productId +
+                                ", tx hash: " + txHash);
+
+                        // Mark as success to exit the loop
+                        success = true;
+
+                    } catch (Exception e) {
+                        retryCount++;
+
+                        // Check if it's an ID conflict error
+                        boolean isIdConflict = false;
+                        if (e.getMessage() != null &&
+                                (e.getMessage().contains("already exists") ||
+                                        e.getMessage().contains("revert") && e.getMessage().contains("Item ID already exists"))) {
+                            isIdConflict = true;
+                        }
+
+                        if (isIdConflict) {
+                            // ID conflict - increment ID and retry
+                            blockchainItemId = baseItemId + retryCount * 100000;
+                            System.out.println("ID conflict detected. Retrying with new ID: " + blockchainItemId);
+
+                            // Small delay to avoid overwhelming the node
+                            try {
+                                Thread.sleep(1000);
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                            }
+                        } else {
+                            // Not an ID conflict, rethrow
+                            throw e;
+                        }
+                    }
+                }
+
+                if (!success) {
+                    throw new RuntimeException("Failed to create blockchain item after " + maxRetries + " attempts");
+                }
+
+                // Update order item with blockchain ID
+                Optional<OrderItem> itemOpt = orderItemRepository.findByOrder_IdAndProduct_Id(orderId, productId);
+                if (itemOpt.isPresent()) {
+                    OrderItem item = itemOpt.get();
+                    item.setBlockchainItemId(blockchainItemId);
+                    orderItemRepository.save(item);
+                }
+
+                // Create Items record in the database
+                try {
+                    Product product = productRepository.findById(productId)
+                            .orElseThrow(() -> new RuntimeException("Product not found"));
+
+                    Users customer = userRepository.findById(customerId)
+                            .orElseThrow(() -> new RuntimeException("Customer not found"));
+
+                    Chains supplyChain = chainRepository.findById(supplyChainId)
+                            .orElseThrow(() -> new RuntimeException("Supply chain not found"));
+
+                    Items productItem = new Items();
+                    productItem.setId(blockchainItemId);
+                    productItem.setName(product.getName());
+                    productItem.setItemType("product");
+                    productItem.setQuantity(quantity);
+                    productItem.setOwner(customer);
+                    productItem.setSupplyChain(supplyChain);
+                    productItem.setStatus("CREATED");
+                    productItem.setBlockchainTxHash(txHash);
+                    productItem.setBlockchainStatus("CONFIRMED");
+                    productItem.setCreatedAt(new Date());
+                    productItem.setUpdatedAt(new Date());
+                    productItem.setParentItemIds(new ArrayList<>());
+
+                    itemRepository.save(productItem);
+                } catch (Exception e) {
+                    System.err.println("Error creating Items record: " + e.getMessage());
+                    // Don't fail the entire operation if just the Items record fails
+                }
+
+                // Return the successful blockchain item ID
+                return blockchainItemId;
+
             } catch (Exception e) {
-                System.err.println("Error creating item on blockchain: " + e.getMessage());
+                System.err.println("Error creating blockchain item for product: " + e.getMessage());
                 throw new CompletionException(e);
             }
         });

@@ -20,4 +20,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
 
     // 🔥 Support blockchain item lookup
     Optional<OrderItem> findByBlockchainItemId(Long blockchainItemId);
+
+    // 🆕 Added method to find an order item by order ID and product ID
+    Optional<OrderItem> findByOrder_IdAndProduct_Id(Long orderId, Long productId);
 }

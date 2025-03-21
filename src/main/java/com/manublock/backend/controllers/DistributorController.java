@@ -2,10 +2,8 @@ package com.manublock.backend.controllers;
 
 import com.manublock.backend.dto.MaterialRequestDTO;
 import com.manublock.backend.dto.OrderResponseDTO;
-import com.manublock.backend.dto.TransportDTO;
-import com.manublock.backend.models.MaterialRequest;
-import com.manublock.backend.models.Order;
-import com.manublock.backend.models.Transport;
+import com.manublock.backend.dto.TransportResponseDTO;
+import com.manublock.backend.models.*;
 import com.manublock.backend.services.DistributorService;
 import com.manublock.backend.utils.DTOConverter;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,7 +42,8 @@ public class DistributorController {
             Transport transport = distributorService.createMaterialTransport(
                     distributorId, materialRequestId, scheduledPickupDate, scheduledDeliveryDate);
 
-            return ResponseEntity.ok(transport);
+            // Return the DTO instead of the entity
+            return ResponseEntity.ok(new TransportResponseDTO(transport));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error creating material transport: " + e.getMessage());
@@ -55,7 +54,8 @@ public class DistributorController {
     public ResponseEntity<?> recordPickup(@PathVariable Long transportId) {
         try {
             Transport transport = distributorService.recordPickup(transportId);
-            return ResponseEntity.ok(transport);
+            // Return the DTO instead of the entity
+            return ResponseEntity.ok(new TransportResponseDTO(transport));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error recording pickup: " + e.getMessage());
@@ -66,7 +66,8 @@ public class DistributorController {
     public ResponseEntity<?> recordDelivery(@PathVariable Long transportId) {
         try {
             Transport transport = distributorService.recordDelivery(transportId);
-            return ResponseEntity.ok(transport);
+            // Return the DTO instead of the entity
+            return ResponseEntity.ok(new TransportResponseDTO(transport));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error recording delivery: " + e.getMessage());
@@ -79,8 +80,8 @@ public class DistributorController {
             List<Transport> transports = distributorService.getTransportsByDistributor(distributorId);
 
             // Convert to DTOs to prevent circular references
-            List<TransportDTO> transportDTOs = transports.stream()
-                    .map(TransportDTO::new)
+            List<TransportResponseDTO> transportDTOs = transports.stream()
+                    .map(TransportResponseDTO::new)
                     .collect(Collectors.toList());
 
             return ResponseEntity.ok(transportDTOs);
