@@ -133,8 +133,6 @@ public class NodeController {
                 }
             }
 
-            // Remove admin ability to set status directly - ignore any status changes from the frontend
-            // Preserve existing status - status changes should only come from NodeStatusService
             Nodes existingNode = nodeService.getNodeById(nodeId);
             updatedNode.setStatus(existingNode.getStatus());
 

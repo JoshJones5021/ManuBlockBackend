@@ -233,7 +233,6 @@ public class ChainService {
                             .orElseThrow(() -> new RuntimeException("Node not found"));
                     existingNode.setName(updatedNode.getName());
                     existingNode.setRole(updatedNode.getRole());
-                    // Do not update status from here - only NodeStatusService should change node status
                     existingNode.setX(updatedNode.getX());
                     existingNode.setY(updatedNode.getY());
                     if (updatedNode.getAssignedUser() != null) {

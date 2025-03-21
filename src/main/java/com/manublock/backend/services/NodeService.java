@@ -85,10 +85,6 @@ public class NodeService {
                 existingNode.setRole(updatedNode.getRole());
             }
 
-            // Don't allow direct status updates from admin UI
-            // Status should only be changed by the NodeStatusService based on blockchain events
-            // or through specific system operations
-
             // Update coordinates
             existingNode.setX(updatedNode.getX());
             existingNode.setY(updatedNode.getY());
