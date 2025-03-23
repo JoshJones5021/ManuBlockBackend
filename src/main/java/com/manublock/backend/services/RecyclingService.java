@@ -43,7 +43,9 @@ public class RecyclingService {
             throw new RuntimeException("Customer does not own this item");
         }
 
-        if (Arrays.asList("CHURNED", "IN_TRANSIT", "RECYCLING_RECEIVED", "RECYCLED").contains(item.getStatus())) {
+        // Check ALL recycling-related statuses, not just CHURNED
+        if (Arrays.asList("CHURNED", "IN_TRANSIT", "RECYCLING_RECEIVED", "RECYCLED",
+                "RECYCLING_IN_TRANSIT", "SCHEDULED_FOR_RECYCLING").contains(item.getStatus())) {
             throw new RuntimeException("Item is already in the recycling process");
         }
 
@@ -193,36 +195,72 @@ public class RecyclingService {
         return result;
     }
 
-    // MANUFACTURER: Process recycled product into materials
+    /**
+     * Process recycled product into materials and add directly to manufacturer's inventory
+     */
     @Transactional
     public List<Material> processToMaterials(Long manufacturerId, Long itemId, Long supplyChainId, List<Map<String, Object>> materials) {
-        Users manufacturer = userRepository.findById(manufacturerId).orElseThrow(() -> new RuntimeException("Manufacturer not found"));
-        Items recycledItem = itemRepository.findById(itemId).orElseThrow(() -> new RuntimeException("Item not found"));
-        Chains supplyChain = chainRepository.findById(supplyChainId).orElseThrow(() -> new RuntimeException("Supply chain not found"));
+        Users manufacturer = userRepository.findById(manufacturerId)
+                .orElseThrow(() -> new RuntimeException("Manufacturer not found"));
+        Items recycledItem = itemRepository.findById(itemId)
+                .orElseThrow(() -> new RuntimeException("Item not found"));
+        Chains supplyChain = chainRepository.findById(supplyChainId)
+                .orElseThrow(() -> new RuntimeException("Supply chain not found"));
 
         if (!recycledItem.getOwner().getId().equals(manufacturerId) || !"RECYCLING_RECEIVED".equals(recycledItem.getStatus())) {
             throw new RuntimeException("Invalid recycled item state");
+        }
+
+        // Calculate total material quantity being salvaged
+        double totalSalvagedQuantity = 0;
+        for (Map<String, Object> materialData : materials) {
+            Long quantity = Long.parseLong(materialData.get("quantity").toString());
+            totalSalvagedQuantity += quantity;
+        }
+
+        // Validate against original product's total material
+        Optional<OrderItem> orderItemOpt = orderItemRepository.findByBlockchainItemId(itemId);
+        if (orderItemOpt.isPresent()) {
+            OrderItem orderItem = orderItemOpt.get();
+            Product product = orderItem.getProduct();
+
+            double originalMaterialQuantity = 0;
+            if (product.getMaterialQuantities() != null && !product.getMaterialQuantities().isEmpty()) {
+                for (ProductMaterialQuantity pmq : product.getMaterialQuantities()) {
+                    originalMaterialQuantity += pmq.getQuantity();
+                }
+
+                double maxRecoverableQuantity = originalMaterialQuantity;
+                if (totalSalvagedQuantity > maxRecoverableQuantity) {
+                    throw new RuntimeException("Cannot recover more materials than what was originally used to make the product. Maximum recoverable: " + maxRecoverableQuantity);
+                }
+            }
         }
 
         List<Material> recycledMaterials = new ArrayList<>();
         List<Long> materialBlockchainIds = new ArrayList<>();
         List<Long> outputQuantities = new ArrayList<>();
 
+        // Core logic to update or create materials
         for (Map<String, Object> materialData : materials) {
             String materialName = (String) materialData.get("name");
             Long quantity = Long.parseLong(materialData.get("quantity").toString());
 
-            // Look for existing material with this name owned by the manufacturer
+            if (quantity <= 0) continue; // Skip zero quantity
+
             List<Material> existingMaterials = materialRepository.findByNameAndSupplier_Id(materialName, manufacturerId);
             Material material;
 
             if (!existingMaterials.isEmpty()) {
-                // Update existing material quantity
                 material = existingMaterials.get(0);
                 material.setQuantity(material.getQuantity() + quantity);
                 material.setUpdatedAt(new Date());
+
+                // Update additional properties if provided
+                material.setDescription((String) materialData.get("description"));
+                material.setUnit((String) materialData.get("unit"));
+                material.setSpecifications((String) materialData.get("specifications"));
             } else {
-                // Create new material if it doesn't exist
                 material = new Material();
                 material.setName(materialName);
                 material.setDescription((String) materialData.get("description"));
@@ -241,39 +279,51 @@ public class RecyclingService {
             outputQuantities.add(quantity);
         }
 
-        Long primaryMaterialBlockchainId = materialBlockchainIds.get(0);
-        Long primaryOutputQuantity = outputQuantities.get(0);
+        // Blockchain processing
+        if (!materialBlockchainIds.isEmpty()) {
+            Long primaryMaterialBlockchainId = materialBlockchainIds.get(0);
+            Long primaryOutputQuantity = outputQuantities.get(0);
 
-        blockchainService.processItem(Collections.singletonList(recycledItem.getId()), primaryMaterialBlockchainId,
-                        Collections.singletonList(recycledItem.getQuantity()), primaryOutputQuantity, "recycled-material", manufacturerId)
-                .thenAccept(txHash -> {
-                    // Update the status of the original recycled item
-                    recycledItem.setStatus("RECYCLED");
-                    recycledItem.setBlockchainTxHash(txHash);
-                    recycledItem.setBlockchainStatus("CONFIRMED");
-                    recycledItem.setUpdatedAt(new Date());
-                    itemRepository.save(recycledItem);
+            blockchainService.processItem(
+                            Collections.singletonList(recycledItem.getId()),
+                            primaryMaterialBlockchainId,
+                            Collections.singletonList(recycledItem.getQuantity()),
+                            primaryOutputQuantity,
+                            "recycled-material",
+                            manufacturerId
+                    )
+                    .thenAccept(txHash -> {
+                        recycledItem.setStatus("RECYCLED");
+                        recycledItem.setBlockchainTxHash(txHash);
+                        recycledItem.setBlockchainStatus("CONFIRMED");
+                        recycledItem.setUpdatedAt(new Date());
+                        itemRepository.save(recycledItem);
 
-                    // Add this new code: Update the status of the newly created recycled material items
-                    try {
-                        for (Long materialId : materialBlockchainIds) {
-                            // Find the item in the items table by its ID
-                            Optional<Items> materialItemOpt = itemRepository.findById(materialId);
-                            if (materialItemOpt.isPresent()) {
-                                Items materialItem = materialItemOpt.get();
-                                // Update the status to AVAILABLE instead of PROCESSING
-                                materialItem.setStatus("AVAILABLE");
-                                materialItem.setUpdatedAt(new Date());
-                                itemRepository.save(materialItem);
+                        // Optional: Update status of related material items if they exist
+                        try {
+                            for (Long materialId : materialBlockchainIds) {
+                                Optional<Items> materialItemOpt = itemRepository.findById(materialId);
+                                if (materialItemOpt.isPresent()) {
+                                    Items materialItem = materialItemOpt.get();
+                                    materialItem.setStatus("AVAILABLE");
+                                    materialItem.setUpdatedAt(new Date());
+                                    itemRepository.save(materialItem);
+                                }
                             }
+                        } catch (Exception e) {
+                            System.err.println("Error updating recycled material status: " + e.getMessage());
                         }
-                    } catch (Exception e) {
-                        System.err.println("Error updating recycled material status: " + e.getMessage());
-                    }
-                });
+                    });
+        } else {
+            // No valid materials, just mark recycled item as recycled
+            recycledItem.setStatus("RECYCLED");
+            recycledItem.setUpdatedAt(new Date());
+            itemRepository.save(recycledItem);
+        }
 
         return recycledMaterials;
     }
+
 
     // MANUFACTURER: Get recycled materials
     public List<Material> getRecycledMaterialsByManufacturer(Long manufacturerId) {

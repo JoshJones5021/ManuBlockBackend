@@ -98,74 +98,91 @@ public class CustomerService {
         // Update order with items
         savedOrder.setItems(orderItems);
 
-        // 🔗 Blockchain Transaction - Send total quantity with improved error handling
+        // Start blockchain operations asynchronously
+        CompletableFuture.runAsync(() -> {
+            try {
+                processBlockchainOperations(savedOrder, customer, supplyChain, orderItems);
+            } catch (Exception e) {
+                System.err.println("Blockchain operations failed: " + e.getMessage());
+                e.printStackTrace();
+            }
+        });
+
+        // Return the saved order immediately without waiting for blockchain
+        return savedOrder;
+    }
+
+    /**
+     * Process blockchain operations separately from the main request thread
+     */
+    private void processBlockchainOperations(Order order, Users customer, Chains supplyChain, List<OrderItem> orderItems) {
         try {
             // Calculate total quantity
-            Long totalQuantity = items.stream()
-                    .mapToLong(OrderItemDTO::getQuantity)
+            Long totalQuantity = orderItems.stream()
+                    .mapToLong(OrderItem::getQuantity)
                     .sum();
 
-            // Use a base orderId for blockchain (using timestamp to reduce chance of conflict)
-            Long blockchainId = System.currentTimeMillis();
+            // Generate a blockchain ID that's definitely unique
+            Long blockchainId = generateUniqueBlockchainId();
 
-            CompletableFuture<String> blockchainTx = blockchainService.createItem(
-                    blockchainId,          // Use the unique id as a base
-                    supplyChain.getId(),   // Supply chain ID
-                    totalQuantity,         // Total quantity
-                    "ORDER",               // Type
-                    customer.getId()       // Customer ID
-            );
+            // Use the blockchain ID from the supply chain if available
+            Long chainId = supplyChain.getBlockchainId() != null ?
+                    supplyChain.getBlockchainId() : supplyChain.getId();
 
-            // Set a timeout for the blockchain operation
-            String blockchainTxHash = blockchainTx.get(60, TimeUnit.SECONDS); // 60 second timeout
-            savedOrder.setBlockchainTxHash(blockchainTxHash);
-            savedOrder = orderRepository.save(savedOrder);
+            // Create order on blockchain
+            String txHash = blockchainService.createItem(
+                    blockchainId,
+                    chainId,
+                    totalQuantity,
+                    "ORDER",
+                    customer.getId()
+            ).get(60, TimeUnit.SECONDS); // Wait for this transaction to complete
 
-            // Create blockchain items for each order item
-            List<CompletableFuture<Long>> itemFutures = new ArrayList<>();
+            // Update order with blockchain hash
+            order.setBlockchainTxHash(txHash);
+            orderRepository.save(order);
+            System.out.println("✅ Order recorded on blockchain with hash: " + txHash);
 
+            // Create product items separately
             for (OrderItem orderItem : orderItems) {
                 try {
-                    // Create an item on the blockchain for each order item with the improved method
-                    CompletableFuture<Long> blockchainItemFuture = blockchainService.createItemOnBlockchain(
-                            savedOrder.getId(),
-                            supplyChain.getId(),
-                            customer.getId(),
-                            orderItem.getProduct().getId(),
-                            orderItem.getQuantity()
-                    );
+                    // Generate a unique ID for each product item
+                    Long productItemId = generateUniqueBlockchainId();
 
-                    itemFutures.add(blockchainItemFuture);
+                    // Create the blockchain item
+                    blockchainService.createItem(
+                            productItemId,
+                            chainId,
+                            orderItem.getQuantity(),
+                            "product",
+                            customer.getId()
+                    ).thenAccept(productTxHash -> {
+                        try {
+                            // Update the order item with blockchain ID
+                            orderItem.setBlockchainItemId(productItemId);
+                            orderItemRepository.save(orderItem);
+                            System.out.println("✅ Product item created for order item: " + orderItem.getId());
+                        } catch (Exception e) {
+                            System.err.println("Error updating order item: " + e.getMessage());
+                        }
+                    });
                 } catch (Exception e) {
-                    System.err.println("Error initiating blockchain item creation: " + e.getMessage());
-                    // Continue with other items even if one fails
+                    System.err.println("Error creating blockchain item for product: " + e.getMessage());
                 }
             }
-
-            // Wait for all futures to complete, with timeout
-            try {
-                CompletableFuture.allOf(itemFutures.toArray(new CompletableFuture[0]))
-                        .get(120, TimeUnit.SECONDS); // 2 minute timeout for all items
-
-                System.out.println("✅ All blockchain items created successfully for order: " + savedOrder.getId());
-            } catch (Exception e) {
-                System.err.println("⚠️ Some blockchain items may not have been created: " + e.getMessage());
-                // Order is still created, just with potentially missing blockchain items
-            }
-
         } catch (Exception e) {
-            System.err.println("Blockchain order creation failed: " + e.getMessage());
-
-            // Mark the order with a special status to indicate blockchain problem
-            savedOrder.setStatus("Requested (Pending Blockchain)");
-            savedOrder = orderRepository.save(savedOrder);
-
-            // We still return the order, but with an indication that there was a blockchain issue
-            System.err.println("Order created in database but blockchain registration failed: " + savedOrder.getId());
+            System.err.println("Error in blockchain operations: " + e.getMessage());
+            e.printStackTrace();
         }
+    }
 
-        // Return the saved order
-        return savedOrder;
+    /**
+     * Generates a unique blockchain ID to avoid conflicts
+     */
+    private Long generateUniqueBlockchainId() {
+        long timestamp = System.currentTimeMillis();
+        int randomComponent = new Random().nextInt(1000000);
+        return timestamp * 1000L + randomComponent;
     }
 
 
@@ -320,13 +337,6 @@ public class CustomerService {
                 baseComponent * 1_000_000L +            // Base value    (00BBBBBB000000)
                 timeComponent * 1_000L +                // Timestamp     (0000000TTTTTT000)
                 random;                                 // Random suffix (0000000000000RRR)
-    }
-
-    /**
-     * Simplified version that just uses current time and a random factor
-     */
-    public static Long generateUniqueBlockchainId() {
-        return generateUniqueBlockchainId(null, 0);
     }
 
     /**

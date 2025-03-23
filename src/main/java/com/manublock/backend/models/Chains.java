@@ -44,6 +44,10 @@ public class Chains {
     @Column
     private String blockchainStatus;
 
+    // New field to store blockchain ID separately from database ID
+    @Column
+    private Long blockchainId;
+
     // Original getters and setters
     public Long getId() {
         return id;
@@ -124,5 +128,14 @@ public class Chains {
 
     public void setBlockchainStatus(String blockchainStatus) {
         this.blockchainStatus = blockchainStatus;
+    }
+
+    // Getter and setter for the new blockchainId field
+    public Long getBlockchainId() {
+        return blockchainId;
+    }
+
+    public void setBlockchainId(Long blockchainId) {
+        this.blockchainId = blockchainId;
     }
 }

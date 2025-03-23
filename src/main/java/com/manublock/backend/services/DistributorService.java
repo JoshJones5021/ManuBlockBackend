@@ -94,6 +94,7 @@ public class DistributorService {
         transport.setStatus("In Transit");
         transport.setActualPickupDate(new Date());
         transport.setUpdatedAt(new Date());
+        transportRepository.save(transport);
 
         // Update related records
         if (transport.getType().equals("Material Transport")) {
@@ -143,18 +144,39 @@ public class DistributorService {
             order.getItems().forEach(item -> {
                 if (item.getBlockchainItemId() != null) {
                     try {
-                        // Get user IDs
-                        Long manufacturerId = item.getProduct().getManufacturer().getId();
+                        // IMPORTANT CHANGE: Use customer ID instead of manufacturer ID
+                        // This reflects the actual ownership in the blockchain
+                        Long customerId = order.getCustomer().getId();
                         Long distributorId = transport.getDistributor().getId();
 
                         String actionType = "product-pickup:distributor:" + distributorId;
 
+                        // Check if the item exists in the database
+                        Optional<Items> itemEntityOpt = itemRepository.findById(item.getBlockchainItemId());
+                        if (!itemEntityOpt.isPresent()) {
+                            // Create the missing item record if it doesn't exist
+                            Items newItem = new Items();
+                            newItem.setId(item.getBlockchainItemId());
+                            newItem.setName(item.getProduct().getName());
+                            newItem.setItemType("product");
+                            newItem.setQuantity(item.getQuantity());
+                            newItem.setOwner(order.getCustomer());  // Set customer as owner
+                            newItem.setSupplyChain(order.getSupplyChain());
+                            newItem.setStatus("READY_FOR_SHIPMENT");
+                            newItem.setBlockchainStatus("CONFIRMED");
+                            newItem.setCreatedAt(new Date());
+                            newItem.setUpdatedAt(new Date());
+                            itemRepository.save(newItem);
+                            System.out.println("Created missing item record for blockchain ID: " + item.getBlockchainItemId());
+                        }
+
+                        // Transfer using customer as the source (actual blockchain owner)
                         blockchainService.transferItem(
                                 item.getBlockchainItemId(),
                                 distributorId,     // to user ID
                                 item.getQuantity(),
                                 actionType,
-                                manufacturerId     // from user ID
+                                customerId         // from user ID - CUSTOMER, not manufacturer
                         ).thenAccept(txHash -> {
                             // Store the transaction hash
                             transport.setBlockchainTxHash(txHash);
@@ -186,9 +208,37 @@ public class DistributorService {
                     }
                 }
             });
+        } else if (transport.getType().equals("Recycling Pickup")) {
+            // Handle recycling pickup (if implemented in your system)
+            Items item = transport.getRecycledItem();
+            if (item != null) {
+                try {
+                    Long customerId = transport.getSource().getId(); // Customer is the source for recycling
+                    Long distributorId = transport.getDistributor().getId();
+
+                    blockchainService.transferItem(
+                            item.getId(),
+                            distributorId,
+                            item.getQuantity(),
+                            "recycling-pickup:distributor:" + distributorId,
+                            customerId
+                    ).thenAccept(txHash -> {
+                        transport.setBlockchainTxHash(txHash);
+                        transportRepository.save(transport);
+                        item.setOwner(transport.getDistributor());
+                        item.setStatus("RECYCLING_IN_TRANSIT");
+                        item.setBlockchainTxHash(txHash);
+                        item.setBlockchainStatus("CONFIRMED");
+                        item.setUpdatedAt(new Date());
+                        itemRepository.save(item);
+                    });
+                } catch (Exception e) {
+                    System.err.println("Error with recycling pickup blockchain operation: " + e.getMessage());
+                }
+            }
         }
 
-        return transportRepository.save(transport);
+        return transport;
     }
 
     /**

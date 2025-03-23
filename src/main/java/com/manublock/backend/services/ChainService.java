@@ -24,8 +24,6 @@ import java.util.stream.Collectors;
 @Service
 public class ChainService {
     private static final Logger LOGGER = Logger.getLogger(ChainService.class.getName());
-    private static final int MAX_BLOCKCHAIN_RETRIES = 5;
-    private static final int MAX_ID_INCREMENT_RETRIES = 10;
 
     @Autowired
     private ChainRepository chainRepository;
@@ -44,7 +42,7 @@ public class ChainService {
 
     /**
      * Creates a new supply chain in the database and registers it on the blockchain
-     * With improved retry mechanism for handling ID conflicts on the blockchain
+     * Using a random blockchain ID to avoid ID conflicts
      */
     public Chains createSupplyChain(String name, String description, Long userId) {
         Users user = userRepository.findById(userId)
@@ -65,20 +63,63 @@ public class ChainService {
         Chains savedChain = chainRepository.save(chain);
         LOGGER.info("Created supply chain in database with ID: " + savedChain.getId());
 
-        // Async blockchain registration with improved error handling and retry mechanism
-        registerSupplyChainOnBlockchainWithRetry(savedChain);
+        // Generate a unique random blockchain ID
+        Long blockchainId = generateUniqueBlockchainId();
+
+        // Async blockchain registration with random ID
+        registerSupplyChainOnBlockchainWithRandomId(savedChain, blockchainId);
 
         return savedChain;
     }
 
     /**
-     * Registers a supply chain on the blockchain asynchronously
-     * With improved error handling, retry mechanism, and ID conflict resolution
+     * Generates a unique ID for blockchain that is unrelated to database IDs
+     * to avoid conflicts with existing blockchain IDs
      */
-    private void registerSupplyChainOnBlockchainWithRetry(Chains chain) {
+    private Long generateUniqueBlockchainId() {
+        // Generate a random ID in a very large range to minimize collision probability
+        // Using current timestamp as a base and adding random component
+        long timestamp = System.currentTimeMillis();
+        int randomComponent = new Random().nextInt(1000000);
+        return timestamp * 1000L + randomComponent;
+    }
+
+    /**
+     * Registers a supply chain on the blockchain using a random ID
+     * instead of trying to use the database ID
+     */
+    private void registerSupplyChainOnBlockchainWithRandomId(Chains chain, Long blockchainId) {
         try {
             if (blockchainService != null) {
-                attemptBlockchainRegistration(chain.getId(), chain.getId(), 0, chain);
+                LOGGER.info("Attempting blockchain registration for chain " + chain.getId() +
+                        " with blockchain ID " + blockchainId);
+
+                CompletableFuture<String> future = blockchainService.createSupplyChain(blockchainId, chain.getCreatedBy().getId());
+
+                future.thenAccept(txHash -> {
+                    try {
+                        // Store both IDs in the database to maintain the mapping
+                        chain.setBlockchainTxHash(txHash);
+                        chain.setBlockchainStatus("CONFIRMED");
+                        chain.setBlockchainId(blockchainId); // Store the blockchain ID
+                        chainRepository.save(chain);
+                        LOGGER.info("Supply chain " + chain.getId() + " successfully registered on blockchain with ID: " +
+                                blockchainId + ", txHash: " + txHash);
+                    } catch (Exception e) {
+                        LOGGER.log(Level.SEVERE, "Error updating blockchain status for chain " + chain.getId(), e);
+                    }
+                }).exceptionally(ex -> {
+                    try {
+                        // Mark as failed if blockchain transaction fails
+                        LOGGER.log(Level.SEVERE, "Blockchain transaction failed for chain " + chain.getId(), ex);
+                        chain.setBlockchainStatus("FAILED");
+                        chain.setBlockchainTxHash(null);
+                        chainRepository.save(chain);
+                    } catch (Exception e) {
+                        LOGGER.log(Level.SEVERE, "Error updating blockchain failure status for chain " + chain.getId(), e);
+                    }
+                    return null;
+                });
             } else {
                 LOGGER.warning("BlockchainService not available - unable to register chain " + chain.getId());
                 chain.setBlockchainStatus("PENDING");
@@ -90,85 +131,6 @@ public class ChainService {
             chain.setBlockchainStatus("FAILED");
             chainRepository.save(chain);
         }
-    }
-
-    /**
-     * Attempts to register a supply chain on the blockchain, with retry logic
-     * for handling ID conflicts and other errors
-     *
-     * @param originalId The original database ID of the chain
-     * @param attemptId The current ID we're trying to use on the blockchain
-     * @param retryCount Current retry count
-     * @param chain The chain entity to update with results
-     */
-    private void attemptBlockchainRegistration(Long originalId, Long attemptId, int retryCount, Chains chain) {
-        if (retryCount >= MAX_ID_INCREMENT_RETRIES) {
-            LOGGER.severe("Exceeded maximum ID increment retries for chain " + originalId + ". Giving up.");
-            chain.setBlockchainStatus("FAILED");
-            chain.setBlockchainTxHash("ID_CONFLICT_UNRESOLVABLE");
-            chainRepository.save(chain);
-            return;
-        }
-
-        LOGGER.info("Attempting blockchain registration for chain " + originalId +
-                " with blockchain ID " + attemptId + " (attempt #" + (retryCount + 1) + ")");
-
-        CompletableFuture<String> future = blockchainService.createSupplyChain(attemptId, chain.getCreatedBy().getId());
-
-        future.thenAccept(txHash -> {
-            try {
-                // Registration succeeded - update with successful transaction
-                if (originalId.equals(attemptId)) {
-                    // Original ID worked - simple update
-                    chain.setBlockchainTxHash(txHash);
-                    chain.setBlockchainStatus("CONFIRMED");
-                    chainRepository.save(chain);
-                    LOGGER.info("Supply chain " + chain.getId() + " successfully registered on blockchain with original ID: " + txHash);
-                } else {
-                    // We used a different ID on the blockchain than in our database
-                    // Log this mapping for future reference
-                    chain.setBlockchainTxHash(txHash);
-                    chain.setBlockchainStatus("CONFIRMED");
-                    // Store the mapping in some way - either in the hash field or in a separate table
-                    // Here we'll store it in the tx hash with a prefix
-                    chain.setBlockchainTxHash("REMAPPED:" + attemptId + ":" + txHash);
-                    chainRepository.save(chain);
-                    LOGGER.info("Supply chain " + chain.getId() + " registered on blockchain with remapped ID " +
-                            attemptId + ": " + txHash);
-                }
-            } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, "Error updating blockchain status for chain " + chain.getId(), e);
-            }
-        }).exceptionally(ex -> {
-            if (ex.getMessage().contains("already exists") ||
-                    ex.getMessage().contains("duplicate") ||
-                    ex.getMessage().contains("ID conflict")) {
-                // ID conflict detected - try with incremented ID
-                Long nextAttemptId = attemptId + 1;
-                LOGGER.warning("ID conflict detected for chain ID " + attemptId + ". Retrying with ID " + nextAttemptId);
-
-                // Wait a small amount of time before retrying
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                }
-
-                // Recursive call with incremented ID
-                attemptBlockchainRegistration(originalId, nextAttemptId, retryCount + 1, chain);
-            } else {
-                try {
-                    // For other types of errors, mark as failed
-                    LOGGER.log(Level.SEVERE, "Blockchain transaction failed for chain " + chain.getId(), ex);
-                    chain.setBlockchainStatus("FAILED");
-                    chain.setBlockchainTxHash(null);
-                    chainRepository.save(chain);
-                } catch (Exception e) {
-                    LOGGER.log(Level.SEVERE, "Error updating blockchain failure status for chain " + chain.getId(), e);
-                }
-            }
-            return null;
-        });
     }
 
     /**
@@ -189,13 +151,13 @@ public class ChainService {
                                 .collect(Collectors.toList()),
                         chain.getCreatedAt() != null ? chain.getCreatedAt().toInstant() : null,
                         chain.getUpdatedAt() != null ? chain.getUpdatedAt().toInstant() : null,
-                        chain.getBlockchainStatus(), // Include blockchain status
-                        chain.getBlockchainTxHash() // Include blockchain transaction hash
+                        chain.getBlockchainStatus(),
+                        chain.getBlockchainTxHash(),
+                        chain.getBlockchainId()
                 ))
                 .collect(Collectors.toList());
     }
 
-    // Rest of the methods remain unchanged...
     /**
      * Get a specific supply chain by ID with blockchain status
      */
@@ -217,8 +179,9 @@ public class ChainService {
                         .collect(Collectors.toList()),
                 chain.getCreatedAt() != null ? chain.getCreatedAt().toInstant() : null,
                 chain.getUpdatedAt() != null ? chain.getUpdatedAt().toInstant() : null,
-                chain.getBlockchainStatus(), // Include blockchain status
-                chain.getBlockchainTxHash() // Include blockchain transaction hash
+                chain.getBlockchainStatus(),
+                chain.getBlockchainTxHash(),
+                chain.getBlockchainId()
         );
     }
 
@@ -273,6 +236,7 @@ public class ChainService {
 
         Map<String, Object> status = new HashMap<>();
         status.put("id", chain.getId());
+        status.put("blockchainId", chain.getBlockchainId());
         status.put("blockchainStatus", chain.getBlockchainStatus());
         status.put("blockchainTxHash", chain.getBlockchainTxHash());
         status.put("name", chain.getName());
@@ -294,7 +258,8 @@ public class ChainService {
                 chain.getCreatedAt() != null ? chain.getCreatedAt().toInstant() : null,
                 chain.getUpdatedAt() != null ? chain.getUpdatedAt().toInstant() : null,
                 chain.getBlockchainStatus(),
-                chain.getBlockchainTxHash()
+                chain.getBlockchainTxHash(),
+                chain.getBlockchainId()
         )).collect(Collectors.toList());
     }
 }

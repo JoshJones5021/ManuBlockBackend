@@ -245,15 +245,32 @@ public class ManufacturerController {
         return ResponseEntity.ok(productDTOs);
     }
 
-    // In MaterialController or ManufacturerController
     @GetMapping("/materials/available/{manufacturerId}")
     public ResponseEntity<?> getAvailableMaterials(@PathVariable Long manufacturerId) {
         try {
-            List<Material> materials = manufacturerService.getAvailableMaterialsForManufacturer(manufacturerId);
-            return ResponseEntity.ok(materials);
+            // Get materials from supplier allocation
+            List<Material> purchasedMaterials = manufacturerService.getAvailableMaterialsForManufacturer(manufacturerId);
+
+            // Also get materials from recycling
+            List<Material> recycledMaterials = materialRepository.findBySupplier_Id(manufacturerId);
+
+            // Combine the lists, removing duplicates by material ID
+            Map<Long, Material> combinedMaterials = new HashMap<>();
+
+            // Add purchased materials
+            for (Material material : purchasedMaterials) {
+                combinedMaterials.put(material.getId(), material);
+            }
+
+            // Add recycled materials (will overwrite duplicates)
+            for (Material material : recycledMaterials) {
+                combinedMaterials.put(material.getId(), material);
+            }
+
+            return ResponseEntity.ok(new ArrayList<>(combinedMaterials.values()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error retrieving available materials: " + e.getMessage());
+                    .body(Map.of("error", "Error retrieving available materials: " + e.getMessage()));
         }
     }
 

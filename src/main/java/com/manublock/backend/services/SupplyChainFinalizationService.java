@@ -72,16 +72,20 @@ public class SupplyChainFinalizationService {
         chain.setUpdatedAt(new Date());
         chain.setBlockchainStatus("FINALIZED");
 
-        // 5. Register all users on the blockchain using admin wallet
-        // 5. Register all users on the blockchain using admin wallet
+        // 5. Register all users on the blockchain using admin wallet and the blockchain ID
+        Long blockchainId = chain.getBlockchainId();
+        if (blockchainId == null) {
+            throw new RuntimeException("Supply chain does not have a valid blockchain ID. Cannot finalize.");
+        }
+
         nodes.stream()
                 .filter(node -> node.getAssignedUser() != null)
                 .map(node -> node.getAssignedUser())
                 .distinct() // Remove duplicates
                 .forEach(user -> {
                     try {
-                        // Authorize user in blockchain using admin wallet
-                        adminBlockchainService.authorizeParticipant(supplyChainId, user.getId());
+                        // Authorize user in blockchain using admin wallet and the blockchain ID
+                        adminBlockchainService.authorizeParticipant(blockchainId, user.getId());
                     } catch (Exception e) {
                         // Log error but continue with other users
                         System.err.println("Failed to authorize user " + user.getUsername() +

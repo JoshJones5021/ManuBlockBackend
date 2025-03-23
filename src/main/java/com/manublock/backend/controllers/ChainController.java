@@ -150,7 +150,8 @@ public class ChainController {
                     finalizedChain.getCreatedAt() != null ? finalizedChain.getCreatedAt().toInstant() : null,
                     finalizedChain.getUpdatedAt() != null ? finalizedChain.getUpdatedAt().toInstant() : null,
                     finalizedChain.getBlockchainStatus(),
-                    finalizedChain.getBlockchainTxHash()
+                    finalizedChain.getBlockchainTxHash(),
+                    finalizedChain.getBlockchainId() // Include blockchain ID in the response
             );
 
             return ResponseEntity.ok(response);

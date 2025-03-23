@@ -86,13 +86,13 @@ public class BlockchainService {
 
     /**
      * Creates a supply chain on blockchain with the admin's wallet
-     * Updated to include creator's user ID and better detect ID conflicts
+     * Now accepts a randomly generated ID instead of trying to use the database ID
      */
-    synchronized public CompletableFuture<String> createSupplyChain(Long supplyChainId, Long creatorUserId) {
-        System.out.println("📋 Starting createSupplyChain for ID: " + supplyChainId + " by user: " + creatorUserId);
+    synchronized public CompletableFuture<String> createSupplyChain(Long blockchainId, Long creatorUserId) {
+        System.out.println("📋 Starting createSupplyChain for blockchain ID: " + blockchainId + " by user: " + creatorUserId);
 
         // Format parameters for the transaction record
-        String parameters = supplyChainId + "," + creatorUserId;
+        String parameters = blockchainId + "," + creatorUserId;
 
         Optional<BlockchainTransaction> existingTx = transactionRepository
                 .findByStatus("PENDING")
@@ -163,7 +163,7 @@ public class BlockchainService {
 
         // Updated function call with both parameters
         RemoteFunctionCall<TransactionReceipt> functionCall = contract.createSupplyChain(
-                BigInteger.valueOf(supplyChainId),
+                BigInteger.valueOf(blockchainId),
                 BigInteger.valueOf(creatorUserId));
 
         return sendTransactionWithRetry(functionCall, 0, tx)
@@ -183,10 +183,10 @@ public class BlockchainService {
                     return txHash;
                 })
                 .exceptionally(ex -> {
-                    // Improve error detection for ID conflicts
                     String errorMsg = ex.getMessage();
 
-                    // Detect ID conflicts better
+                    // We're using random IDs now, so ID conflicts should be extremely rare
+                    // but still check for them just in case
                     if (errorMsg != null &&
                             (errorMsg.contains("already exists") ||
                                     errorMsg.contains("duplicate") ||
@@ -194,16 +194,15 @@ public class BlockchainService {
                                     errorMsg.contains("exists") ||
                                     errorMsg.contains("invalid opcode"))) {
 
-                        // This is likely an ID conflict - transform the error
-                        System.out.println("❌ Likely ID conflict detected: " + errorMsg);
+                        System.out.println("❌ ID conflict detected despite using random ID: " + errorMsg);
                         tx.setStatus("FAILED");
-                        tx.setFailureReason("ID conflict: Supply chain ID " + supplyChainId + " already exists");
+                        tx.setFailureReason("ID conflict: Supply chain ID " + blockchainId + " already exists");
                         transactionRepository.save(tx);
 
                         CompletableFuture<String> future = new CompletableFuture<>();
                         future.completeExceptionally(
-                                new RuntimeException("ID conflict: Supply chain ID " + supplyChainId + " already exists"));
-                        throw new RuntimeException("ID conflict: Supply chain ID " + supplyChainId + " already exists");
+                                new RuntimeException("ID conflict: Supply chain ID " + blockchainId + " already exists"));
+                        throw new RuntimeException("ID conflict: Supply chain ID " + blockchainId + " already exists");
                     } else {
                         // Other type of error
                         System.out.println("❌ Transaction failed: " + errorMsg);

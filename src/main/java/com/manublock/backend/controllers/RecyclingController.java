@@ -209,6 +209,7 @@ public class RecyclingController {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> materials = (List<Map<String, Object>>) payload.get("materials");
 
+            // Here we're just passing the materials data directly without any product ID references
             List<Material> recycledMaterials = recyclingService.processToMaterials(
                     manufacturerId, itemId, supplyChainId, materials);
 

@@ -15,38 +15,29 @@ public class ChainResponseDTO {
     private Instant updatedAt;
     private String blockchainStatus;
     private String blockchainTxHash;
+    private Long blockchainId;
 
-    public ChainResponseDTO(Long id, String name, String description, Users createdBy,
-                            List<NodeResponseDTO> nodes, List<EdgeResponseDTO> edges,
-                            Instant createdAt, Instant updatedAt) {
-        this.id = id;
-        this.name = name;
-        this.description = description;
-        this.createdBy = new UserResponseDTO(createdBy);
-        this.nodes = nodes;
-        this.edges = edges;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
-        this.blockchainStatus = null; // Default values for backward compatibility
-        this.blockchainTxHash = null;
-    }
-
+    /**
+     * Single comprehensive constructor that handles all fields
+     */
     public ChainResponseDTO(Long id, String name, String description, Users createdBy,
                             List<NodeResponseDTO> nodes, List<EdgeResponseDTO> edges,
                             Instant createdAt, Instant updatedAt,
-                            String blockchainStatus, String blockchainTxHash) {
+                            String blockchainStatus, String blockchainTxHash, Long blockchainId) {
         this.id = id;
         this.name = name;
         this.description = description;
-        this.createdBy = new UserResponseDTO(createdBy);
+        this.createdBy = createdBy != null ? new UserResponseDTO(createdBy) : null;
         this.nodes = nodes;
         this.edges = edges;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.blockchainStatus = blockchainStatus;
         this.blockchainTxHash = blockchainTxHash;
+        this.blockchainId = blockchainId;
     }
 
+    // Getters
     public Long getId() { return id; }
     public String getName() { return name; }
     public String getDescription() { return description; }
@@ -57,4 +48,5 @@ public class ChainResponseDTO {
     public Instant getUpdatedAt() { return updatedAt; }
     public String getBlockchainStatus() { return blockchainStatus; }
     public String getBlockchainTxHash() { return blockchainTxHash; }
+    public Long getBlockchainId() { return blockchainId; }
 }
