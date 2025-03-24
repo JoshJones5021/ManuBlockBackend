@@ -1,6 +1,8 @@
 package com.manublock.backend.dto;
 
+import com.manublock.backend.models.Chains;
 import com.manublock.backend.models.MaterialRequest;
+import com.manublock.backend.models.Users;
 
 import java.util.Date;
 import java.util.List;
@@ -11,8 +13,8 @@ public class MaterialRequestDTO {
     private String requestNumber;
     private String status;
     private ManufacturerDTO manufacturer;
-    private Long supplierId;
-    private Long supplyChainId;
+    private SupplierDTO supplier; // Changed from supplierId to a DTO
+    private SupplyChainDTO supplyChain; // Changed from supplyChainId to a DTO
     private Date createdAt;
     private Date updatedAt;
     private Date requestedDeliveryDate;
@@ -23,8 +25,8 @@ public class MaterialRequestDTO {
         this.requestNumber = request.getRequestNumber();
         this.status = request.getStatus();
         this.manufacturer = new ManufacturerDTO(request.getManufacturer());
-        this.supplierId = request.getSupplier().getId();
-        this.supplyChainId = request.getSupplyChain().getId();
+        this.supplier = new SupplierDTO(request.getSupplier());
+        this.supplyChain = new SupplyChainDTO(request.getSupplyChain());
         this.createdAt = request.getCreatedAt();
         this.updatedAt = request.getUpdatedAt();
         this.requestedDeliveryDate = request.getRequestedDeliveryDate();
@@ -35,13 +37,40 @@ public class MaterialRequestDTO {
                 .collect(Collectors.toList());
     }
 
+    // Nested static DTO classes to eliminate circular references
+    public static class SupplierDTO {
+        private Long id;
+        private String username;
+
+        public SupplierDTO(Users supplier) {
+            this.id = supplier.getId();
+            this.username = supplier.getUsername();
+        }
+
+        public Long getId() { return id; }
+        public String getUsername() { return username; }
+    }
+
+    public static class SupplyChainDTO {
+        private Long id;
+        private String name;
+
+        public SupplyChainDTO(Chains supplyChain) {
+            this.id = supplyChain.getId();
+            this.name = supplyChain.getName();
+        }
+
+        public Long getId() { return id; }
+        public String getName() { return name; }
+    }
+
     // Getters
     public Long getId() { return id; }
     public String getRequestNumber() { return requestNumber; }
     public String getStatus() { return status; }
     public ManufacturerDTO getManufacturer() { return manufacturer; }
-    public Long getSupplierId() { return supplierId; }
-    public Long getSupplyChainId() { return supplyChainId; }
+    public SupplierDTO getSupplier() { return supplier; }
+    public SupplyChainDTO getSupplyChain() { return supplyChain; }
     public Date getCreatedAt() { return createdAt; }
     public Date getUpdatedAt() { return updatedAt; }
     public Date getRequestedDeliveryDate() { return requestedDeliveryDate; }

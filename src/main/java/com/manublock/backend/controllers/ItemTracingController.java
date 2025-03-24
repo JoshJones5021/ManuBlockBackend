@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/tracing")
@@ -34,7 +35,29 @@ public class ItemTracingController {
     public ResponseEntity<?> getItemsBySupplyChain(@PathVariable Long supplyChainId) {
         try {
             List<Items> items = itemService.getItemsBySupplyChain(supplyChainId);
-            return ResponseEntity.ok(items);
+
+            // Convert to simplified DTOs to avoid recursion
+            List<Map<String, Object>> itemDtos = items.stream()
+                    .map(item -> {
+                        Map<String, Object> dto = new HashMap<>();
+                        dto.put("id", item.getId());
+                        dto.put("name", item.getName());
+                        dto.put("itemType", item.getItemType());
+                        dto.put("quantity", item.getQuantity());
+                        dto.put("status", item.getStatus());
+                        if (item.getOwner() != null) {
+                            dto.put("ownerId", item.getOwner().getId());
+                            dto.put("ownerName", item.getOwner().getUsername());
+                        }
+                        dto.put("blockchainStatus", item.getBlockchainStatus());
+                        dto.put("blockchainTxHash", item.getBlockchainTxHash());
+                        dto.put("createdAt", item.getCreatedAt());
+                        dto.put("updatedAt", item.getUpdatedAt());
+                        return dto;
+                    })
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(itemDtos);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving items: " + e.getMessage());
@@ -45,7 +68,29 @@ public class ItemTracingController {
     public ResponseEntity<?> getItemsByOwner(@PathVariable Long ownerId) {
         try {
             List<Items> items = itemService.getItemsByOwner(ownerId);
-            return ResponseEntity.ok(items);
+
+            // Convert to simplified DTOs to avoid recursion
+            List<Map<String, Object>> itemDtos = items.stream()
+                    .map(item -> {
+                        Map<String, Object> dto = new HashMap<>();
+                        dto.put("id", item.getId());
+                        dto.put("name", item.getName());
+                        dto.put("itemType", item.getItemType());
+                        dto.put("quantity", item.getQuantity());
+                        dto.put("status", item.getStatus());
+                        if (item.getSupplyChain() != null) {
+                            dto.put("supplyChainId", item.getSupplyChain().getId());
+                            dto.put("supplyChainName", item.getSupplyChain().getName());
+                        }
+                        dto.put("blockchainStatus", item.getBlockchainStatus());
+                        dto.put("blockchainTxHash", item.getBlockchainTxHash());
+                        dto.put("createdAt", item.getCreatedAt());
+                        dto.put("updatedAt", item.getUpdatedAt());
+                        return dto;
+                    })
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(itemDtos);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving items: " + e.getMessage());

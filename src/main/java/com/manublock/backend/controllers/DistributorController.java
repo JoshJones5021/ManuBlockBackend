@@ -2,6 +2,7 @@ package com.manublock.backend.controllers;
 
 import com.manublock.backend.dto.MaterialRequestDTO;
 import com.manublock.backend.dto.OrderResponseDTO;
+import com.manublock.backend.dto.TransportDTO;
 import com.manublock.backend.dto.TransportResponseDTO;
 import com.manublock.backend.models.*;
 import com.manublock.backend.services.DistributorService;
@@ -43,7 +44,7 @@ public class DistributorController {
                     distributorId, materialRequestId, scheduledPickupDate, scheduledDeliveryDate);
 
             // Return the DTO instead of the entity
-            return ResponseEntity.ok(new TransportResponseDTO(transport));
+            return ResponseEntity.ok(new TransportDTO(transport));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error creating material transport: " + e.getMessage());
@@ -55,7 +56,7 @@ public class DistributorController {
         try {
             Transport transport = distributorService.recordPickup(transportId);
             // Return the DTO instead of the entity
-            return ResponseEntity.ok(new TransportResponseDTO(transport));
+            return ResponseEntity.ok(new TransportDTO(transport));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error recording pickup: " + e.getMessage());
@@ -67,7 +68,7 @@ public class DistributorController {
         try {
             Transport transport = distributorService.recordDelivery(transportId);
             // Return the DTO instead of the entity
-            return ResponseEntity.ok(new TransportResponseDTO(transport));
+            return ResponseEntity.ok(new TransportDTO(transport));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error recording delivery: " + e.getMessage());
@@ -80,8 +81,8 @@ public class DistributorController {
             List<Transport> transports = distributorService.getTransportsByDistributor(distributorId);
 
             // Convert to DTOs to prevent circular references
-            List<TransportResponseDTO> transportDTOs = transports.stream()
-                    .map(TransportResponseDTO::new)
+            List<TransportDTO> transportDTOs = transports.stream()
+                    .map(TransportDTO::new)
                     .collect(Collectors.toList());
 
             return ResponseEntity.ok(transportDTOs);
@@ -113,10 +114,8 @@ public class DistributorController {
         try {
             List<Order> orders = distributorService.getReadyOrders();
 
-            // Convert to DTOs to prevent circular references
-            List<OrderResponseDTO> orderDTOs = orders.stream()
-                    .map(DTOConverter::convertToOrderDTO)
-                    .collect(Collectors.toList());
+            // Convert to DTOs using the enhanced converter
+            List<OrderResponseDTO> orderDTOs = DTOConverter.convertToOrderDTOList(orders);
 
             return ResponseEntity.ok(orderDTOs);
         } catch (Exception e) {

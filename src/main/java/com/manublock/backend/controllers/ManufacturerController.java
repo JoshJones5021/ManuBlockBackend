@@ -126,7 +126,9 @@ public class ManufacturerController {
     public ResponseEntity<?> deactivateProduct(@PathVariable Long productId) {
         try {
             Product product = manufacturerService.deactivateProduct(productId);
-            return ResponseEntity.ok(product);
+            // Convert to DTO
+            ProductDTO productDTO = ProductDTO.fromEntity(product);
+            return ResponseEntity.ok(productDTO);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error deactivating product: " + e.getMessage());
@@ -214,7 +216,9 @@ public class ManufacturerController {
             String quality = payload.get("quality");
 
             ProductionBatch batch = manufacturerService.completeProductionBatch(batchId, quality);
-            return ResponseEntity.ok(batch);
+            // Convert to DTO
+            ProductionBatchDTO batchDTO = new ProductionBatchDTO(batch);
+            return ResponseEntity.ok(batchDTO);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error completing production batch: " + e.getMessage());
@@ -229,7 +233,9 @@ public class ManufacturerController {
             String reason = payload.get("reason");
 
             ProductionBatch batch = manufacturerService.rejectProductionBatch(batchId, reason);
-            return ResponseEntity.ok(batch);
+            // Convert to DTO
+            ProductionBatchDTO batchDTO = new ProductionBatchDTO(batch);
+            return ResponseEntity.ok(batchDTO);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error rejecting production batch: " + e.getMessage());
@@ -314,10 +320,8 @@ public class ManufacturerController {
         try {
             List<Order> orders = manufacturerService.getOrdersByManufacturer(manufacturerId);
 
-            // Convert to DTOs to prevent circular references
-            List<OrderResponseDTO> orderDTOs = orders.stream()
-                    .map(DTOConverter::convertToOrderDTO)
-                    .collect(Collectors.toList());
+            // Convert to DTOs using the enhanced converter
+            List<OrderResponseDTO> orderDTOs = DTOConverter.convertToOrderDTOList(orders);
 
             return ResponseEntity.ok(orderDTOs);
         } catch (Exception e) {
@@ -436,7 +440,7 @@ public class ManufacturerController {
             // Fetch the material request by ID
             MaterialRequest materialRequest = manufacturerService.getMaterialRequestById(requestId);
 
-            // Convert to DTO to prevent circular references and expose necessary details
+            // Convert to DTO to prevent circular references
             MaterialRequestDTO requestDTO = new MaterialRequestDTO(materialRequest);
 
             return ResponseEntity.ok(requestDTO);

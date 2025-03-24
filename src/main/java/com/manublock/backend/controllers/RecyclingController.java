@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -37,14 +38,18 @@ public class RecyclingController {
         try {
             Long customerId = Long.valueOf(payload.get("customerId").toString());
             String notes = (String) payload.get("notes");
-            String pickupAddress = (String) payload.get("pickupAddress"); // Extract the new parameter
+            String pickupAddress = (String) payload.get("pickupAddress");
 
             Items item = recyclingService.markItemAsChurned(itemId, customerId, notes, pickupAddress);
-            return ResponseEntity.ok(Map.of(
-                    "message", "Product marked for recycling successfully",
-                    "itemId", item.getId(),
-                    "status", item.getStatus()
-            ));
+
+            // Create a simplified response without the full item entity
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Product marked for recycling successfully");
+            response.put("itemId", item.getId());
+            response.put("status", item.getStatus());
+            response.put("updatedAt", item.getUpdatedAt());
+
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error marking product for recycling: " + e.getMessage()));
@@ -58,7 +63,24 @@ public class RecyclingController {
     public ResponseEntity<?> getChurnedProducts(@PathVariable Long customerId) {
         try {
             List<Items> items = recyclingService.getChurnedItemsByCustomer(customerId);
-            return ResponseEntity.ok(items);
+
+            // Convert to simplified DTOs to avoid recursion
+            List<Map<String, Object>> itemDtos = items.stream()
+                    .map(item -> {
+                        Map<String, Object> dto = new HashMap<>();
+                        dto.put("id", item.getId());
+                        dto.put("name", item.getName());
+                        dto.put("itemType", item.getItemType());
+                        dto.put("quantity", item.getQuantity());
+                        dto.put("status", item.getStatus());
+                        dto.put("pickupAddress", item.getPickupAddress());
+                        dto.put("notes", item.getNotes());
+                        dto.put("updatedAt", item.getUpdatedAt());
+                        return dto;
+                    })
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(itemDtos);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error retrieving churned products: " + e.getMessage()));

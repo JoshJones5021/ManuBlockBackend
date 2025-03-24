@@ -112,10 +112,8 @@ public class CustomerController {
             List<Order> orders = customerService.getOrdersByCustomer(customerId);
             System.out.println("Controller: Found " + orders.size() + " orders");
 
-            // Convert to DTOs to avoid circular references
-            List<OrderResponseDTO> orderDTOs = orders.stream()
-                    .map(DTOConverter::convertToOrderDTO)
-                    .collect(Collectors.toList());
+            // Convert to DTOs using the enhanced converter
+            List<OrderResponseDTO> orderDTOs = DTOConverter.convertToOrderDTOList(orders);
 
             return ResponseEntity.ok(orderDTOs);
         } catch (Exception e) {

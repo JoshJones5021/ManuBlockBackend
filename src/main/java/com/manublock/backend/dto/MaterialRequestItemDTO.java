@@ -1,11 +1,11 @@
 package com.manublock.backend.dto;
 
-import com.manublock.backend.dto.MaterialDTO;
+import com.manublock.backend.models.Material;
 import com.manublock.backend.models.MaterialRequestItem;
 
-class MaterialRequestItemDTO {
+public class MaterialRequestItemDTO {
     private Long id;
-    private MaterialDTO material;
+    private MaterialSimpleDTO material;
     private Long requestedQuantity;
     private Long approvedQuantity;
     private Long allocatedQuantity;
@@ -14,7 +14,8 @@ class MaterialRequestItemDTO {
 
     public MaterialRequestItemDTO(MaterialRequestItem item) {
         this.id = item.getId();
-        this.material = new MaterialDTO(item.getMaterial());
+        // Use a simplified material DTO to avoid recursion
+        this.material = new MaterialSimpleDTO(item.getMaterial());
         this.requestedQuantity = item.getRequestedQuantity();
         this.approvedQuantity = item.getApprovedQuantity();
         this.allocatedQuantity = item.getAllocatedQuantity();
@@ -22,9 +23,33 @@ class MaterialRequestItemDTO {
         this.blockchainItemId = item.getBlockchainItemId();
     }
 
+    // Static inner class for simplified material representation
+    public static class MaterialSimpleDTO {
+        private Long id;
+        private String name;
+        private String description;
+        private String unit;
+        private String specifications;
+
+        public MaterialSimpleDTO(Material material) {
+            this.id = material.getId();
+            this.name = material.getName();
+            this.description = material.getDescription();
+            this.unit = material.getUnit();
+            this.specifications = material.getSpecifications();
+        }
+
+        // Getters
+        public Long getId() { return id; }
+        public String getName() { return name; }
+        public String getDescription() { return description; }
+        public String getUnit() { return unit; }
+        public String getSpecifications() { return specifications; }
+    }
+
     // Getters
     public Long getId() { return id; }
-    public MaterialDTO getMaterial() { return material; }
+    public MaterialSimpleDTO getMaterial() { return material; }
     public Long getRequestedQuantity() { return requestedQuantity; }
     public Long getApprovedQuantity() { return approvedQuantity; }
     public Long getAllocatedQuantity() { return allocatedQuantity; }

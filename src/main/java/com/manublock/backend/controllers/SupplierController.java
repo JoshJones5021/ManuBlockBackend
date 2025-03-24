@@ -1,5 +1,6 @@
 package com.manublock.backend.controllers;
 
+import com.manublock.backend.dto.MaterialDTO;
 import com.manublock.backend.dto.MaterialRequestDTO;
 import com.manublock.backend.models.Material;
 import com.manublock.backend.models.MaterialRequest;
@@ -38,7 +39,9 @@ public class SupplierController {
             Material material = supplierService.createMaterial(
                     name, description, quantity, unit, specifications, supplierId, supplyChainId);
 
-            return ResponseEntity.ok(material);
+            // Convert to MaterialDTO to prevent recursion
+            MaterialDTO materialDTO = new MaterialDTO(material);
+            return ResponseEntity.ok(materialDTO);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error creating material: " + e.getMessage());
@@ -51,7 +54,9 @@ public class SupplierController {
             @RequestBody List<SupplierService.MaterialRequestItemApproval> approvals) {
         try {
             MaterialRequest request = supplierService.approveRequest(requestId, approvals);
-            return ResponseEntity.ok(request);
+            // Convert to DTO to prevent recursion
+            MaterialRequestDTO requestDTO = new MaterialRequestDTO(request);
+            return ResponseEntity.ok(requestDTO);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error approving request: " + e.getMessage());
@@ -62,7 +67,9 @@ public class SupplierController {
     public ResponseEntity<?> allocateMaterials(@PathVariable Long requestId) {
         try {
             MaterialRequest request = supplierService.allocateMaterials(requestId);
-            return ResponseEntity.ok(request);
+            // Convert to DTO to prevent recursion
+            MaterialRequestDTO requestDTO = new MaterialRequestDTO(request);
+            return ResponseEntity.ok(requestDTO);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error allocating materials: " + e.getMessage());
@@ -73,7 +80,11 @@ public class SupplierController {
     public ResponseEntity<?> getMaterialsBySupplier(@PathVariable Long supplierId) {
         try {
             List<Material> materials = supplierService.getMaterialsBySupplier(supplierId);
-            return ResponseEntity.ok(materials);
+            // Convert to DTO list
+            List<MaterialDTO> materialDTOs = materials.stream()
+                    .map(MaterialDTO::new)
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(materialDTOs);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error retrieving materials: " + e.getMessage());
