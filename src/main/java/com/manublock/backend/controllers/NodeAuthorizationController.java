@@ -1,5 +1,7 @@
 package com.manublock.backend.controllers;
 
+import com.manublock.backend.models.Chains;
+import com.manublock.backend.repositories.ChainRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +29,9 @@ public class NodeAuthorizationController {
     private NodeRepository nodeRepository;
 
     @Autowired
+    private ChainRepository chainRepository;
+
+    @Autowired
     private Web3j web3j;
 
     @Value("${blockchain.contract.address}")
@@ -40,8 +45,16 @@ public class NodeAuthorizationController {
     @GetMapping("/supply-chain/{supplyChainId}")
     public ResponseEntity<?> checkSupplyChainNodes(@PathVariable Long supplyChainId) {
         try {
-            List<Nodes> nodes = nodeRepository.findBySupplyChain_Id(supplyChainId);
+            // Look up the blockchain ID from the database
+            Chains chain = chainRepository.findById(supplyChainId)
+                    .orElseThrow(() -> new RuntimeException("Supply chain not found"));
 
+            // Get the blockchain ID
+            Long blockchainId = chain.getBlockchainId();
+
+            System.out.println("Using blockchain ID " + blockchainId + " for supply chain " + supplyChainId);
+
+            List<Nodes> nodes = nodeRepository.findBySupplyChain_Id(supplyChainId);
             List<Map<String, Object>> results = new ArrayList<>();
 
             for (Nodes node : nodes) {
@@ -56,7 +69,8 @@ public class NodeAuthorizationController {
                     // Check authorization
                     boolean isAuthorized = false;
                     try {
-                        String cacheKey = supplyChainId + ":" + node.getAssignedUser().getId();
+                        // Use blockchain ID instead of database ID
+                        String cacheKey = blockchainId + ":" + node.getAssignedUser().getId();
                         Long lastCheck = lastCheckTime.get(cacheKey);
 
                         if (lastCheck != null && System.currentTimeMillis() - lastCheck < CACHE_EXPIRY) {
@@ -65,12 +79,14 @@ public class NodeAuthorizationController {
                                 isAuthorized = cachedResult;
                             }
                         } else {
-                            isAuthorized = checkUserAuthorization(supplyChainId, node.getAssignedUser().getId());
+                            // Use blockchain ID for authorization check
+                            isAuthorized = checkUserAuthorization(blockchainId, node.getAssignedUser().getId());
                             authorizationCache.put(cacheKey, isAuthorized);
                             lastCheckTime.put(cacheKey, System.currentTimeMillis());
                         }
                     } catch (Exception e) {
                         nodeResult.put("error", e.getMessage());
+                        System.err.println("Error checking authorization: " + e.getMessage());
                     }
 
                     nodeResult.put("authorized", isAuthorized);
@@ -84,6 +100,7 @@ public class NodeAuthorizationController {
             return ResponseEntity.ok(results);
 
         } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.status(500).body(Map.of(
                     "error", "Failed to check authorization status: " + e.getMessage()
             ));

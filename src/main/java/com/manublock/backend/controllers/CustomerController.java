@@ -28,9 +28,22 @@ public class CustomerController {
     }
 
     @PostMapping("/orders")
-    public ResponseEntity<?> createOrder(@RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> createOrder(@RequestBody Map<String, Object> payload, @RequestHeader(value = "X-Customer-Id", required = false) Long headerCustomerId) {
         try {
-            Long customerId = Long.valueOf(payload.get("customerId").toString());
+            // Try to get customerId from the header first
+            Long customerId = headerCustomerId;
+
+            // If not in header, try to get from payload
+            if (customerId == null && payload.containsKey("customerId")) {
+                customerId = Long.valueOf(payload.get("customerId").toString());
+            }
+
+            // If still null, throw an exception
+            if (customerId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("Customer ID is required. Provide it in the request body or X-Customer-Id header.");
+            }
+
             Long supplyChainId = Long.valueOf(payload.get("supplyChainId").toString());
 
             // Get items from the payload

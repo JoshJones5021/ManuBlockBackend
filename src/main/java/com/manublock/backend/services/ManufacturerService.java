@@ -294,6 +294,11 @@ public class ManufacturerService {
                         return new RuntimeException("Supply chain not found with ID: " + supplyChainId);
                     });
 
+            Long blockchainSupplyChainId = supplyChain.getBlockchainId();
+            if (blockchainSupplyChainId == null) {
+                throw new RuntimeException("Supply chain has no blockchain ID");
+            }
+
             // Validate items
             System.out.println("Validating " + (items != null ? items.size() : "null") + " material items");
             if (items == null || items.isEmpty()) {
@@ -383,7 +388,7 @@ public class ManufacturerService {
                     // The actual method call depends on your BlockchainService implementation
                     CompletableFuture<String> future = blockchainService.createItem(
                             blockchainItemId,       // A unique ID for this material request
-                            supplyChainId,          // The supply chain ID
+                            blockchainSupplyChainId, // Use blockchain ID instead of database ID
                             totalQuantity,          // Use total quantity from all items (must be positive)
                             "material-request",     // Type of the item
                             manufacturerId          // User ID of the creator
@@ -836,10 +841,15 @@ public class ManufacturerService {
             // Generate a unique blockchain ID
             Long blockchainItemId = generateUniqueBlockchainId();
 
+            Long blockchainSupplyChainId = supplyChain.getBlockchainId();
+            if (blockchainSupplyChainId == null) {
+                throw new RuntimeException("Supply chain has no blockchain ID");
+            }
+
             // Create blockchain item for the product
             blockchainService.createItem(
                     blockchainItemId,
-                    supplyChain.getId(),
+                    blockchainSupplyChainId,  // Use blockchain ID instead of database ID
                     item.getQuantity(),
                     "manufactured-product",
                     manufacturer.getId() // Creator is the manufacturer

@@ -52,6 +52,11 @@ public class SupplierService {
         Chains supplyChain = chainRepository.findById(supplyChainId)
                 .orElseThrow(() -> new RuntimeException("Supply chain not found"));
 
+        Long blockchainSupplyChainId = supplyChain.getBlockchainId();
+        if (blockchainSupplyChainId == null) {
+            throw new RuntimeException("Supply chain has no blockchain ID");
+        }
+
         // Generate a unique ID for blockchain
         Long blockchainItemId = generateUniqueBlockchainId();
 
@@ -77,7 +82,8 @@ public class SupplierService {
                 "raw-material",
                 quantity,
                 supplierId,
-                supplyChainId
+                supplyChainId,        // Pass the database ID
+                blockchainSupplyChainId  // Pass the blockchain ID
         );
 
         return savedMaterial;

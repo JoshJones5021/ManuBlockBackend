@@ -1,95 +1,27 @@
 [
 	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "supplyChainId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "participantId",
-				"type": "uint256"
-			}
-		],
-		"name": "authorizeParticipant",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "itemId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "supplyChainId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "quantity",
-				"type": "uint256"
-			},
-			{
-				"internalType": "string",
-				"name": "itemType",
-				"type": "string"
-			},
-			{
-				"internalType": "uint256",
-				"name": "creatorId",
-				"type": "uint256"
-			}
-		],
-		"name": "createItem",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "supplyChainId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "creatorId",
-				"type": "uint256"
-			}
-		],
-		"name": "createSupplyChain",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "itemId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "requesterId",
-				"type": "uint256"
-			}
-		],
-		"name": "deactivateItem",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
 		"inputs": [],
 		"stateMutability": "nonpayable",
 		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "previousAdmin",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "newAdmin",
+				"type": "address"
+			}
+		],
+		"name": "AdminTransferred",
+		"type": "event"
 	},
 	{
 		"anonymous": false,
@@ -235,44 +167,6 @@
 		"type": "event"
 	},
 	{
-		"inputs": [
-			{
-				"internalType": "uint256[]",
-				"name": "sourceItemIds",
-				"type": "uint256[]"
-			},
-			{
-				"internalType": "uint256",
-				"name": "newItemId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256[]",
-				"name": "inputQuantities",
-				"type": "uint256[]"
-			},
-			{
-				"internalType": "uint256",
-				"name": "outputQuantity",
-				"type": "uint256"
-			},
-			{
-				"internalType": "string",
-				"name": "newItemType",
-				"type": "string"
-			},
-			{
-				"internalType": "uint256",
-				"name": "processorId",
-				"type": "uint256"
-			}
-		],
-		"name": "processItem",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
 		"anonymous": false,
 		"inputs": [
 			{
@@ -292,62 +186,6 @@
 		"type": "event"
 	},
 	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "itemId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "toUserId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "quantity",
-				"type": "uint256"
-			},
-			{
-				"internalType": "string",
-				"name": "actionType",
-				"type": "string"
-			},
-			{
-				"internalType": "uint256",
-				"name": "fromUserId",
-				"type": "uint256"
-			}
-		],
-		"name": "transferItem",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "itemId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "enum FlexibleManuBlock.ItemStatus",
-				"name": "newStatus",
-				"type": "uint8"
-			},
-			{
-				"internalType": "uint256",
-				"name": "ownerId",
-				"type": "uint256"
-			}
-		],
-		"name": "updateItemStatus",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
 		"inputs": [],
 		"name": "admin",
 		"outputs": [
@@ -358,6 +196,93 @@
 			}
 		],
 		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "supplyChainId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "participantId",
+				"type": "uint256"
+			}
+		],
+		"name": "authorizeParticipant",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "itemId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "supplyChainId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "quantity",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "itemType",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "creatorId",
+				"type": "uint256"
+			}
+		],
+		"name": "createItem",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "supplyChainId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "creatorId",
+				"type": "uint256"
+			}
+		],
+		"name": "createSupplyChain",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "itemId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "requesterId",
+				"type": "uint256"
+			}
+		],
+		"name": "deactivateItem",
+		"outputs": [],
+		"stateMutability": "nonpayable",
 		"type": "function"
 	},
 	{
@@ -601,6 +526,44 @@
 	{
 		"inputs": [
 			{
+				"internalType": "uint256[]",
+				"name": "sourceItemIds",
+				"type": "uint256[]"
+			},
+			{
+				"internalType": "uint256",
+				"name": "newItemId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256[]",
+				"name": "inputQuantities",
+				"type": "uint256[]"
+			},
+			{
+				"internalType": "uint256",
+				"name": "outputQuantity",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "newItemType",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "processorId",
+				"type": "uint256"
+			}
+		],
+		"name": "processItem",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
 				"internalType": "uint256",
 				"name": "",
 				"type": "uint256"
@@ -679,6 +642,75 @@
 			}
 		],
 		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newAdmin",
+				"type": "address"
+			}
+		],
+		"name": "transferAdmin",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "itemId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "toUserId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "quantity",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "actionType",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "fromUserId",
+				"type": "uint256"
+			}
+		],
+		"name": "transferItem",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "itemId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "enum FlexibleManuBlock.ItemStatus",
+				"name": "newStatus",
+				"type": "uint8"
+			},
+			{
+				"internalType": "uint256",
+				"name": "ownerId",
+				"type": "uint256"
+			}
+		],
+		"name": "updateItemStatus",
+		"outputs": [],
+		"stateMutability": "nonpayable",
 		"type": "function"
 	}
 ]

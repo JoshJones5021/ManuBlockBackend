@@ -30,14 +30,23 @@ public class ItemService {
 
     /**
      * Create a new supply chain item in the database and on blockchain
+     *
+     * @param itemId The ID for the new item
+     * @param name The name of the item
+     * @param itemType The type of the item
+     * @param quantity The quantity of the item
+     * @param ownerId The ID of the owner
+     * @param dbSupplyChainId The database ID of the supply chain
+     * @param blockchainSupplyChainId The blockchain ID of the supply chain
+     * @return The created item
      */
     public Items createItem(Long itemId, String name, String itemType, Long quantity,
-                            Long ownerId, Long supplyChainId) {
+                            Long ownerId, Long dbSupplyChainId, Long blockchainSupplyChainId) {
 
         Users owner = userRepository.findById(ownerId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        Chains supplyChain = chainRepository.findById(supplyChainId)
+        Chains supplyChain = chainRepository.findById(dbSupplyChainId)
                 .orElseThrow(() -> new RuntimeException("Supply chain not found"));
 
         // Create item in database
@@ -57,8 +66,8 @@ public class ItemService {
         // Save to database first
         Items savedItem = itemRepository.save(item);
 
-        // Create item on blockchain using admin wallet
-        adminBlockchainService.createItem(itemId, supplyChainId, quantity, itemType, ownerId)
+        // Create item on blockchain using admin wallet - using blockchainSupplyChainId
+        adminBlockchainService.createItem(itemId, blockchainSupplyChainId, quantity, itemType, ownerId)
                 .thenAccept(txHash -> {
                     // Update blockchain status once transaction is confirmed
                     savedItem.setBlockchainTxHash(txHash);
@@ -74,6 +83,93 @@ public class ItemService {
                 });
 
         return savedItem;
+    }
+
+    /**
+     * Convenience method to create an item using only the blockchain supply chain ID.
+     * This looks up the corresponding database ID first.
+     *
+     * @param itemId The ID for the new item
+     * @param name The name of the item
+     * @param itemType The type of the item
+     * @param quantity The quantity of the item
+     * @param ownerId The ID of the owner
+     * @param blockchainSupplyChainId The blockchain ID of the supply chain
+     * @return The created item
+     */
+    public Items createItemWithBlockchainId(Long itemId, String name, String itemType, Long quantity,
+                                            Long ownerId, Long blockchainSupplyChainId) {
+        // Look up the database ID for this blockchain ID
+        Chains supplyChain = chainRepository.findByBlockchainId(blockchainSupplyChainId)
+                .orElseThrow(() -> new RuntimeException("Supply chain not found with blockchain ID: " + blockchainSupplyChainId));
+
+        Long dbSupplyChainId = supplyChain.getId();
+
+        // Call the original method with both IDs
+        return createItem(itemId, name, itemType, quantity, ownerId, dbSupplyChainId, blockchainSupplyChainId);
+    }
+
+    /**
+     * Convenience method to create an item using only the database supply chain ID.
+     * This looks up the corresponding blockchain ID.
+     *
+     * @param itemId The ID for the new item
+     * @param name The name of the item
+     * @param itemType The type of the item
+     * @param quantity The quantity of the item
+     * @param ownerId The ID of the owner
+     * @param dbSupplyChainId The database ID of the supply chain
+     * @return The created item
+     */
+    public Items createItemWithDbId(Long itemId, String name, String itemType, Long quantity,
+                                    Long ownerId, Long dbSupplyChainId) {
+        // Look up the blockchain ID for this database ID
+        Chains supplyChain = chainRepository.findById(dbSupplyChainId)
+                .orElseThrow(() -> new RuntimeException("Supply chain not found with database ID: " + dbSupplyChainId));
+
+        Long blockchainSupplyChainId = supplyChain.getBlockchainId();
+        if (blockchainSupplyChainId == null) {
+            throw new RuntimeException("Supply chain has no blockchain ID");
+        }
+
+        // Call the original method with both IDs
+        return createItem(itemId, name, itemType, quantity, ownerId, dbSupplyChainId, blockchainSupplyChainId);
+    }
+
+    /**
+     * Backward compatibility method to not break existing code
+     * @deprecated Use the version with both dbSupplyChainId and blockchainSupplyChainId instead
+     */
+    @Deprecated
+    public Items createItem(Long itemId, String name, String itemType, Long quantity,
+                            Long ownerId, Long supplyChainId) {
+        System.out.println("WARNING: Using deprecated ItemService.createItem method with single supplyChainId");
+        try {
+            // First try treating the ID as a database ID
+            Chains supplyChain = chainRepository.findById(supplyChainId)
+                    .orElse(null);
+
+            if (supplyChain != null) {
+                // If found, use it as a database ID and get the blockchain ID
+                System.out.println("Found supply chain with DB ID: " + supplyChainId);
+                Long blockchainId = supplyChain.getBlockchainId();
+                if (blockchainId == null) {
+                    throw new RuntimeException("Supply chain has no blockchain ID");
+                }
+                return createItem(itemId, name, itemType, quantity, ownerId, supplyChainId, blockchainId);
+            }
+
+            // If not found, try treating it as a blockchain ID
+            supplyChain = chainRepository.findByBlockchainId(supplyChainId)
+                    .orElseThrow(() -> new RuntimeException("Supply chain not found with ID " + supplyChainId));
+
+            System.out.println("Found supply chain with blockchain ID: " + supplyChainId + ", DB ID: " + supplyChain.getId());
+            return createItem(itemId, name, itemType, quantity, ownerId, supplyChain.getId(), supplyChainId);
+
+        } catch (Exception e) {
+            System.err.println("Error in deprecated createItem method: " + e.getMessage());
+            throw e;
+        }
     }
 
     /**
