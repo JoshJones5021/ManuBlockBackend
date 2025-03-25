@@ -120,6 +120,6 @@ public class UserController {
     @Transactional
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
-        return userService.deleteUser(id);  // ✅ Directly return the ResponseEntity from the service
+        return userService.deleteUser(id);
     }
 }

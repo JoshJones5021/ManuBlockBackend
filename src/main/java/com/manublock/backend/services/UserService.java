@@ -100,18 +100,11 @@ public class UserService {
         return userRepository.save(user);
     }
 
-    /**
-     * ✅ **Deletes a user safely**
-     * - Ensures admin is not the last one.
-     * - Unassigns user from all supply chain nodes.
-     * - Deletes user if all conditions are met.
-     */
     @Transactional
     public ResponseEntity<?> deleteUser(Long userId) {
         Users user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // ✅ Prevent deleting the last admin
         if (user.getRole() == Roles.ADMIN) {
             long adminCount = userRepository.countByRole(Roles.ADMIN);
             if (adminCount <= 1) {
@@ -121,7 +114,6 @@ public class UserService {
             }
         }
 
-        // ✅ Check if the user is assigned to any supply chain nodes
         List<Nodes> assignedNodes = nodeRepository.findByAssignedUser_Id(userId);
         if (!assignedNodes.isEmpty()) {
             Nodes firstNode = assignedNodes.get(0);
@@ -133,7 +125,6 @@ public class UserService {
             );
         }
 
-        // ✅ If no assignments, delete the user
         userRepository.delete(user);
         return ResponseEntity.ok(Map.of("message", "User deleted successfully"));
     }
