@@ -476,9 +476,10 @@ public class ManufacturerService {
             }
 
             // Check if the item is of the right type
-            if (!"allocated-material".equals(blockchainItem.getItemType())) {
+            if (!"allocated-material".equals(blockchainItem.getItemType()) &&
+                    !"recycled-material".equals(blockchainItem.getItemType())) {
                 throw new RuntimeException("Material with blockchain ID " + item.getBlockchainItemId() +
-                        " is not an allocated material. Type: " + blockchainItem.getItemType());
+                        " is not an allocated or recycled material. Type: " + blockchainItem.getItemType());
             }
         }
 
